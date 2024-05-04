@@ -1,5 +1,5 @@
 val projectName = "oregano"
-val Scala3 = "3.3.2"
+val Scala3 = "3.3.3"
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
@@ -32,8 +32,9 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     headerEmptyLine := false,
 
     resolvers ++= Opts.resolver.sonatypeOssReleases, // Will speed up MiMA during fast back-to-back releases
+    resolvers ++= Opts.resolver.sonatypeOssSnapshots,
     libraryDependencies ++= Seq(
-      "com.github.j-mie6" %%% "parsley" % "4.5.2",
+      "com.github.j-mie6" %%% "parsley" % "5.0-bdb596b-SNAPSHOT",
     ),
 
     Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
