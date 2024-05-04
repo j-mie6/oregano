@@ -1,5 +1,19 @@
+/bin
+/wiki
+/inputs
+**/playground
+/.settings
+/.idea
+target/
+.bsp
+.cache-main
+.classpath
+.project
+.jvmopts
 *.class
 *.log
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
+.vscode
+.metals
+.bloop
+project/project
+project/metals.sbt
