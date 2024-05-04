@@ -8,7 +8,7 @@ abstract class Regex[Match] {
 }
 
 // FIXME: wrong type, not sure how I want to process the typesafe bit yet, ideally avoid duplication, but might have to :(
-inline def compile[S <: String & Singleton](inline regex: S): Regex[S] = ${compileMacro('regex)}
+transparent inline def compile/*[S <: String & Singleton]*/(inline regex: String): Regex[?] = ${compileMacro('regex)}
 
 // this, annoyingly, has to be here or else the splice above complains that it's in a different scope
-private [oregano] def compileMacro[S <: String & Singleton: Type](s: Expr[S])(using Quotes): Expr[Regex[S]] = internal.compileMacro[S](s.valueOrAbort)
+private [oregano] def compileMacro(s: Expr[String])(using Quotes): Expr[Regex[?]] = internal.compileMacro(s.valueOrAbort)
