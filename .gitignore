@@ -17,3 +17,4 @@ target/
 .bloop
 project/project
 project/metals.sbt
+.scala-build/
