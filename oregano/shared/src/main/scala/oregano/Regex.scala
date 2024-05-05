@@ -11,4 +11,4 @@ abstract class Regex[Match] {
 transparent inline def compile/*[S <: String & Singleton]*/(inline regex: String): Regex[?] = ${compileMacro('regex)}
 
 // this, annoyingly, has to be here or else the splice above complains that it's in a different scope
-private [oregano] def compileMacro(s: Expr[String])(using Quotes): Expr[Regex[?]] = internal.compileMacro(s.valueOrAbort)
+private def compileMacro(s: Expr[String])(using Quotes): Expr[Regex[?]] = internal.compileMacro(s.valueOrAbort)
