@@ -1,7 +1,8 @@
 package test
 
-import oregano.compile
+import oregano.regex
 
 @main def test() = {
-    val reg = compile("abc|de")
+    val reg = regex("abc|de")
+    println(reg.matches("abc"))
 }
