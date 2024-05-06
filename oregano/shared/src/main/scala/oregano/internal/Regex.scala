@@ -102,7 +102,9 @@ private enum Regex {
     // NOTE: \Q, \E, and (?:X) are not represented in syntax
 }
 private object Regex {
-    object Lit extends ParserBridge1[Char, Regex]
+    object Lit extends ParserBridge1[Char, Regex] {
+        override def labels: List[String] = List("literal")
+    }
     object Class extends ParserBridge2[Boolean, Diet[Char], Regex]
     object Opt extends ParserBridge1[Regex, Regex]
     object Rep0 extends ParserBridge1[Regex, Regex]
