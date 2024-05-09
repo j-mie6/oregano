@@ -43,7 +43,12 @@ private object parsers {
       */
     private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
     // I believe these two can always appear together, are ambiguous, and `charEsc` should always be first, so make it atomic
-    private lazy val charEsc: Parsley[Int] = atomic(empty)
+    private lazy val charEsc: Parsley[Int] = {
+        val numeric = empty
+        val control = empty
+        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b).toList.map(_ as _): _*)
+        atomic('\\' ~> (single | numeric | control))
+    }
     private lazy val setEsc: Parsley[Diet[Int]] = empty
 
     lazy val cls = Class(clsSet)
