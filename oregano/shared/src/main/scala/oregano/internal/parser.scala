@@ -18,14 +18,13 @@ import Regex.*
 
 private object parsers {
     // FIXME: these sets are non-exhaustive right now
-    // Also, turns out that ] is legal outside of a char class?!
-    private val keyChars = Set('(', ')', '{', '}', '[', ']', '.', '*', '+', '?', '\\', '|', '$', '^')
-    private val escapableChars = keyChars ++ Set('<', '>', ',', '&')
+    private val keyChars = Set('(', ')', '{', '}', '[', '.', '*', '+', '?', '\\', '|', '$', '^')
+    //private val escapableChars = keyChars ++ Set('<', '>', ',', '&')
 
     lazy val regex = expr <~ eof
     // technically, they can be empty on either side of this... we need an Epsilon
     private lazy val expr = chain.right1(term)(Alt from '|')
-    private lazy val term = Cat(some(lit | (Dot from '.')))
+    private lazy val term = Cat(some(lit | (Dot from '.') | cls))
     /** `x`: the character x.
       * `\\`: the backslash character.
       * `\0n`: the octal character with value n (0 <= n <= 7).
@@ -42,49 +41,28 @@ private object parsers {
       * `\e`: the escape character (u001B).
       * `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
       */
-    private lazy val lit = Lit(noneOf(keyChars) | charEsc)
+    private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
     // I believe these two can always appear together, are ambiguous, and `charEsc` should always be first, so make it atomic
-    private lazy val charEsc: Parsley[Char] = atomic(empty)
-    private lazy val setEsc: Parsley[Diet[Char]] = empty
-    /** `[abc]`: a, b, or c.
-      * `[^abc]`: any character except for a, b, or c.
-      * `[a-zA-Z]`: a through z or A through Z, inclusive.
-      * `[a-z[A-Z]]`: alias for the above.
-      * `[a-z&&a]`: just a.
-      * `[a-z&&[def]]`: intersection (d, e, or f).
-      * `[a-z&&[^bc]]`: equivalent to `[ad-z]`.
-      * `[a-z&&[^m-p]]`: equivalent to `[a-lq-z]`.
-      *
-      * The precedence of character class operators is as follows:
-      *   1. literal escape
-      *   2. grouping
-      *   3. range
-      *   4. union
-      *   5. intersection
-      *
-      * the set of metacharacters is ,[\ with &^]- soft-metacharacters
-      */
-    lazy val cls = Class(clsSet)
+    private lazy val charEsc: Parsley[Int] = atomic(empty)
+    private lazy val setEsc: Parsley[Diet[Int]] = empty
 
-    private lazy val clsSet = '[' ~> ('^' ~> clsBody.map(Regex.AllSet -- _) | clsBody)  <~ ']'.explain("classes may not be empty")
+    lazy val cls = Class(clsSet)
+    private lazy val clsSet: Parsley[Diet[Int]] = '[' ~> ('^' ~> clsBody.map(Regex.AllSet -- _) | clsBody)  <~ ']'
     // classes may not be empty, and ] can be used as part of one in that instance: []] is ], but [a]] is a] and [] is an error
     // although []a] is also treated as `a|]`...
     private lazy val clsBody = clsIntersect | ']' ~> clsIntersect
-
-    private lazy val clsAtom: Parsley[Char] = noneOf(']', '[', '\\', '&') | atomic('&' <~ notFollowedBy('&')) | charEsc
-    private lazy val clsRange: Parsley[Diet[Char]] = clsAtom.zip(option(atomic('-' ~> clsAtom))).mapFilterMsg {
+    private lazy val clsAtom = noneOf(']', '[', '\\', '&').map(_.toInt) | atomic('&'.map(_.toInt) <~ notFollowedBy('&')) | charEsc
+    private lazy val clsRange = clsAtom.zip(option(atomic('-' ~> clsAtom))).mapFilterMsg {
         case (l, Some(r)) if l < r => Right(Diet.fromRange(Range(l, r)))
         case (l, Some(r)) => Left(Seq(s"ranges must be ascending, but '$l' is greater than '$r'")) //TODO: whitespace in message!
         case (l, None) => Right(Diet.one(l))
     } | setEsc
-    private lazy val clsUnion: Parsley[Diet[Char]] = (clsRange | clsSet).reduceLeft(_ | _)
-
+    private lazy val clsUnion = (clsRange | clsSet).reduceLeft(_ | _)
     // intersection is lowest precedence, but it's a bit of a pain, because [&&X] and [X&&] are legal, but [&&] is not.
     // similarly, [X&&..&&Y] is the same as [X&&Y].
-    private lazy val clsIntersect = sepBy1(option(clsUnion), "&&").mapFilterMsg { ocss =>
-        val css = ocss.flatten
-        if (css.nonEmpty) Right(css.reduce(_ & _))
-        else Left(Seq("class intersections cannot be empty on both sides"))
+    private lazy val clsIntersect = sepBy1(option(clsUnion), "&&").mapFilterMsg { css => css.flatten.reduceOption(_ & _) match
+        case Some(cs) => Right(cs)
+        case None => Left(Seq("class intersections cannot be empty on both sides"))
     }
 
     // need to make these atomic in general

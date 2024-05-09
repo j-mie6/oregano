@@ -8,6 +8,6 @@ package test
 import oregano.regex
 
 @main def test() = {
-    val reg = regex("abc|d.e")
+    val reg = regex("abc|d.e[0-9]")
     println(reg.matches("abc"))
 }
