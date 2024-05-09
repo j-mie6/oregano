@@ -1,3 +1,8 @@
+/*
+ * Copyright 2022 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 package oregano.internal
 
 import parsley.generic.*
@@ -33,7 +38,7 @@ private enum Regex {
       * `[a-z&&[^bc]]`: equivalent to `[ad-z]`.
       * `[a-z&&[^m-p]]`: equivalent to `[a-lq-z]`.
       */
-    case Class(inc: Boolean, cs: Diet[Char]) // TODO: needs a smart-constructor for internal character classes
+    case Class(cs: Diet[Char]) // TODO: needs a smart-constructor for internal character classes
     /** matches any character (this can include line terminators depending on flags) */
     case Dot extends Regex with ParserBridge0[Regex]
     /** `^`: the beginning of a line */
@@ -102,10 +107,11 @@ private enum Regex {
     // NOTE: \Q, \E, and (?:X) are not represented in syntax
 }
 private object Regex {
+    private [internal] val AllSet = Diet.fromRange(Range('\u0000', '\uffff')) // we actually need ints for this...
     object Lit extends ParserBridge1[Char, Regex] {
         override def labels: List[String] = List("literal")
     }
-    object Class extends ParserBridge2[Boolean, Diet[Char], Regex]
+    object Class extends ParserBridge1[Diet[Char], Regex]
     object Opt extends ParserBridge1[Regex, Regex]
     object Rep0 extends ParserBridge1[Regex, Regex]
     object Rep1 extends ParserBridge1[Regex, Regex]
@@ -134,19 +140,19 @@ private object Regex {
 
     // Predefined Character Classes
     /** `\d`: a digit */
-    object Digit extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = true, set)
+    object Digit extends ParserSingletonBridge[Class] {
+        def con = new Class(set)
         def set = Diet.fromRange(Range('0', '9'))
     }
 
     /** `\D`: a non-digit */
-    object NonDigit extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = false, Digit.set)
+    object NonDigit extends ParserSingletonBridge[Class] {
+        def con = new Class(AllSet -- Digit.set)
     }
 
     /** `\h`: horizontal whitespace */
-    object HorizontalWhitespace extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = true, set)
+    object HorizontalWhitespace extends ParserSingletonBridge[Class] {
+        def con = new Class(set)
         def set = Diet.one(' ')
                       .add('\t')
                       .add('\u00A0')
@@ -159,13 +165,13 @@ private object Regex {
     }
 
     /** `\H`: non-horizontal whitespace */
-    object NonHorizontalWhitespace extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = false, HorizontalWhitespace.set)
+    object NonHorizontalWhitespace extends ParserSingletonBridge[Class] {
+        def con = new Class(AllSet -- HorizontalWhitespace.set)
     }
 
     /** `\s`: a whitespace character **/
-    object Whitespace extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = true, set)
+    object Whitespace extends ParserSingletonBridge[Class] {
+        def con = new Class(set)
         def set = Diet.one(' ')
                       .add('\t')
                       .add('\n')
@@ -175,13 +181,13 @@ private object Regex {
     }
 
     /** `\S`: not a whitespace character */
-    object NonWhitespace extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = false, Whitespace.set)
+    object NonWhitespace extends ParserSingletonBridge[Class] {
+        def con = new Class(AllSet -- Whitespace.set)
     }
 
     /** `\v`: a whitespace character **/
-    object VerticalWhitespace extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = true, set)
+    object VerticalWhitespace extends ParserSingletonBridge[Class] {
+        def con = new Class(set)
         def set = Diet.one('\n')
                       .add('\u000b')
                       .add('\f')
@@ -192,13 +198,13 @@ private object Regex {
     }
 
     /** `\V`: not a whitespace character */
-    object NonVerticalWhitespace extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = false, VerticalWhitespace.set)
+    object NonVerticalWhitespace extends ParserSingletonBridge[Class] {
+        def con = new Class(AllSet -- VerticalWhitespace.set)
     }
 
     /** `\w`: a word character */
-    object Word extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = true, set)
+    object Word extends ParserSingletonBridge[Class] {
+        def con = new Class(set)
         def set = Diet.fromRange(Range('a', 'z'))
                       .addRange(Range('A', 'Z'))
                       .add('_')
@@ -206,8 +212,8 @@ private object Regex {
     }
 
     /** `\W`: a non-word character */
-    object NonWord extends ParserSingletonBridge[Regex] {
-        def con = Class(inc = false, Word.set)
+    object NonWord extends ParserSingletonBridge[Class] {
+        def con = new Class(AllSet -- Word.set)
     }
 
     //TODO: POSIX Character Classes
@@ -248,7 +254,7 @@ private object Regex {
 
     /** `\R`: any Unicode linebreak sequence */
     object Linebreak extends ParserSingletonBridge[Regex] {
-        def con = Alt(Cat(Lit('\u000d'), Lit('\u000a')), Class(inc = true, set))
+        def con = Alt(Cat(Lit('\u000d'), Lit('\u000a')), Class(set))
         def set = Diet.fromRange(Range('\u000a', '\u000d'))
                       .add('\u0085')
                       .add('\u2028')
