@@ -9,6 +9,7 @@ import parsley.quick.*
 import parsley.expr.*
 import parsley.syntax.character.charLift
 import parsley.errors.combinator.*
+import parsley.syntax.all.*
 
 import cats.collections.{Diet, Range}
 
@@ -25,49 +26,49 @@ private object parsers {
     // technically, they can be empty on either side of this... we need an Epsilon
     private lazy val expr = chain.right1(term)(Alt from '|')
     private lazy val term = Cat(some(lit | (Dot from '.') | cls))
-    /** `x`: the character x.
-      * `\\`: the backslash character.
-      * `\0n`: the octal character with value n (0 <= n <= 7).
-      * `\0nn`: the octal character with value nn (0 <= n <= 7).
-      * `\0mnn`: the octal character with value mnn (0 <= m <= 3, 0 <= n <= 7).
-      * `\xhh`: the hexadecimal value 0xhh.
-      * `\xhhhh: the hexadecimal value 0xhhhh.
-      * `\x{h..h}`: the hexadecimal value of arbitrary digits up to MAX_CODE_POINT.
-      * `\t`: the tab character.
-      * `\n`: the newline character.
-      * `\r`: the carriage-return character.
-      * `\f`: the form-feed character.
-      * `\a`: the ascii bell.
-      * `\e`: the escape character (u001B).
-      * `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
-      */
     private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
     // I believe these two can always appear together, are ambiguous, and `charEsc` should always be first, so make it atomic
     private lazy val charEsc: Parsley[Int] = {
-        val numeric = empty
-        val control = empty
+        val hexArb = hexDigit.foldLeft1[BigInt](0)((n, d) => n * 16 + d.asDigit).collectMsg("characters cannot exceed largest codepoint 0x1ffff") {
+            case n if n <= Character.MAX_CODE_POINT => n.toInt
+        }
+        val hexFixed = (hexDigit, hexDigit, option(hexDigit zip hexDigit)).zipped {
+            case (d1, d2, Some((d3, d4))) => d1.asDigit * 4096 + d2.asDigit * 256 + d3.asDigit * 16 + d4.asDigit
+            case (d1, d2, None)           => d1.asDigit * 16 + d2.asDigit
+        }
+        val hexCode = '{' ~> hexArb <~ '}' | hexFixed
+        val octCode = range(min=1, max=3)(octDigit).mapFilterMsg { ds =>
+            val n = ds.foldLeft(0)((n, d) => n * 8 + d.asDigit)
+            if (n > 255) Left(Seq("octal escape sequences cannot be greater than 0377 (255 in decimal)"))
+            else Right(n)
+        }
+        val numeric = 'x' ~> hexCode | '0' ~> octCode
+        // `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
+        val control = 'c' ~> empty
         val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b).toList.map(_ as _): _*)
-        atomic('\\' ~> (single | numeric | control))
+        atomic('\\' ~> (single | numeric | control | '\\'.map(_.toInt)))
     }
     private lazy val setEsc: Parsley[Diet[Int]] = empty
 
-    lazy val cls = Class(clsSet)
-    private lazy val clsSet: Parsley[Diet[Int]] = '[' ~> ('^' ~> clsBody.map(Regex.AllSet -- _) | clsBody)  <~ ']'
-    // classes may not be empty, and ] can be used as part of one in that instance: []] is ], but [a]] is a] and [] is an error
-    // although []a] is also treated as `a|]`...
-    private lazy val clsBody = clsIntersect | ']' ~> clsIntersect
-    private lazy val clsAtom = noneOf(']', '[', '\\', '&').map(_.toInt) | atomic('&'.map(_.toInt) <~ notFollowedBy('&')) | charEsc
-    private lazy val clsRange = clsAtom.zip(option(atomic('-' ~> clsAtom))).mapFilterMsg {
-        case (l, Some(r)) if l < r => Right(Diet.fromRange(Range(l, r)))
-        case (l, Some(r)) => Left(Seq(s"ranges must be ascending, but '$l' is greater than '$r'")) //TODO: whitespace in message!
-        case (l, None) => Right(Diet.one(l))
-    } | setEsc
-    private lazy val clsUnion = (clsRange | clsSet).reduceLeft(_ | _)
-    // intersection is lowest precedence, but it's a bit of a pain, because [&&X] and [X&&] are legal, but [&&] is not.
-    // similarly, [X&&..&&Y] is the same as [X&&Y].
-    private lazy val clsIntersect = sepBy1(option(clsUnion), "&&").mapFilterMsg { css => css.flatten.reduceOption(_ & _) match
-        case Some(cs) => Right(cs)
-        case None => Left(Seq("class intersections cannot be empty on both sides"))
+    lazy val cls = {
+        lazy val clsSet: Parsley[Diet[Int]] = '[' ~> ('^' ~> clsBody.map(Regex.AllSet -- _) | clsBody)  <~ ']'
+        // classes may not be empty, and ] can be used as part of one in that instance: []] is ], but [a]] is a] and [] is an error
+        // although []a] is also treated as `a|]`...
+        lazy val clsBody = clsIntersect | ']' ~> clsIntersect
+        lazy val clsAtom = noneOf(']', '[', '\\', '&').map(_.toInt) | atomic('&'.map(_.toInt) <~ notFollowedBy('&')) | charEsc
+        lazy val clsRange = clsAtom.zip(option(atomic('-' ~> clsAtom))).mapFilterMsg {
+            case (l, Some(r)) if l < r => Right(Diet.fromRange(Range(l, r)))
+            case (l, Some(r)) => Left(Seq(s"ranges must be ascending, but '$l' is greater than '$r'")) //TODO: whitespace in message!
+            case (l, None) => Right(Diet.one(l))
+        } | setEsc
+        lazy val clsUnion = (clsRange | clsSet).reduceLeft(_ | _)
+        // intersection is lowest precedence, but it's a bit of a pain, because [&&X] and [X&&] are legal, but [&&] is not.
+        // similarly, [X&&..&&Y] is the same as [X&&Y].
+        lazy val clsIntersect = sepBy1(option(clsUnion), "&&").mapFilterMsg { css => css.flatten.reduceOption(_ & _) match
+            case Some(cs) => Right(cs)
+            case None => Left(Seq("class intersections cannot be empty on both sides"))
+        }
+        Class(clsSet)
     }
 
     // need to make these atomic in general

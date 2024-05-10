@@ -35,6 +35,7 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
         resolvers ++= Opts.resolver.sonatypeOssSnapshots,
         libraryDependencies ++= Seq(
             "com.github.j-mie6" %%% "parsley" % "5.0-bdb596b-SNAPSHOT",
+            "com.github.j-mie6" %%% "parsley-debug" % "5.0-bdb596b-SNAPSHOT",
             "org.typelevel" %%% "cats-collections-core" % "0.9.8",
             "org.scalatest" %%% "scalatest" % "3.2.17" % Test,
             "org.scalacheck" %%% "scalacheck" % "1.17.0" % Test,

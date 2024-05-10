@@ -36,6 +36,7 @@ class ParserTests extends AnyFlatSpec {
     they should "accept ranges otherwise" in {
         cls.parse("[a-c]") shouldBe Success(Class(Diet.fromRange(Range('a'.toInt, 'c'.toInt))))
         cls.parse("[!--]") shouldBe Success(Class(Diet.fromRange(Range('!'.toInt, '-'.toInt))))
+        cls.parse("[\\0141-\\0172]") shouldBe Success(Class(Diet.fromRange(Range('a'.toInt, 'z'.toInt))))
     }
 
     they should "reject ill-formed ranges" in {
