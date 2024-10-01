@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
+ * Copyright 2024 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -45,7 +45,7 @@ private object parsers {
         val numeric = 'x' ~> hexCode | '0' ~> octCode
         // `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
         val control = 'c' ~> empty
-        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b).toList.map(_ as _): _*)
+        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b).toList.map(_ as _)*)
         atomic('\\' ~> (single | numeric | control | '\\'.map(_.toInt)))
     }
     private lazy val setEsc: Parsley[Diet[Int]] = empty

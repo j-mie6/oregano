@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
+ * Copyright 2024 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
