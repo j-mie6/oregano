@@ -85,7 +85,7 @@ private enum Regex {
     case Cat(rs: List[Regex])
     /** `X|Y`: Either X or Y */
     case Alt(r1: Regex, r2: Regex)
-    /** `(X)`: X, as a cpaturing group */
+    /** `(X)`: X, as a capturing group */
     case Capture(r: Regex)
     /** `\n`: whatever the nth capturing group matched */
     case Back(n: Int)
