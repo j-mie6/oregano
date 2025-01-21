@@ -32,9 +32,8 @@ private object parsers {
         val hexArb = hexDigit.foldLeft1[BigInt](0)((n, d) => n * 16 + d.asDigit).collectMsg("characters cannot exceed largest codepoint 0x1ffff") {
             case n if n <= Character.MAX_CODE_POINT => n.toInt
         }
-        val hexFixed = (hexDigit, hexDigit, option(hexDigit zip hexDigit)).zipped {
-            case (d1, d2, Some((d3, d4))) => d1.asDigit * 4096 + d2.asDigit * 256 + d3.asDigit * 16 + d4.asDigit
-            case (d1, d2, None)           => d1.asDigit * 16 + d2.asDigit
+        val hexFixed = (hexDigit, hexDigit).zipped {
+            case (d1, d2) => d1.asDigit * 16 + d2.asDigit
         }
         val hexCode = '{' ~> hexArb <~ '}' | hexFixed
         val octCode = range(min=1, max=3)(octDigit).mapFilterMsg { ds =>
