@@ -29,19 +29,25 @@ private object parsers {
     private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
     // I believe these two can always appear together, are ambiguous, and `charEsc` should always be first, so make it atomic
     private lazy val charEsc: Parsley[Int] = {
-        val hexArb = hexDigit.foldLeft1[BigInt](0)((n, d) => n * 16 + d.asDigit).collectMsg("characters cannot exceed largest codepoint 0x1ffff") {
+        // corresponds with \x{ ... }
+        val hexArbEscX = hexDigit.foldLeft1[BigInt](0)((n, d) => n * 16 + d.asDigit).collectMsg("characters cannot exceed largest codepoint 0x1ffff") {
             case n if n <= Character.MAX_CODE_POINT => n.toInt
         }
-        val hexFixed = (hexDigit, hexDigit).zipped {
+        // corresponds with \xhh
+        val hexFixedEscX = (hexDigit, hexDigit).zipped {
             case (d1, d2) => d1.asDigit * 16 + d2.asDigit
         }
-        val hexCode = '{' ~> hexArb <~ '}' | hexFixed
+        // corresponds with \uHHHH
+        val hexFixedEscU = (hexDigit, hexDigit, hexDigit, hexDigit).zipped {
+            case (d1, d2, d3, d4) => d1.asDigit * 4096 + d2.asDigit * 256 + d3.asDigit * 16 + d4.asDigit 
+        }
+        val hexCodeEscX = '{' ~> hexArbEscX <~ '}' | hexFixedEscX
         val octCode = range(min=1, max=3)(octDigit).mapFilterMsg { ds =>
             val n = ds.foldLeft(0)((n, d) => n * 8 + d.asDigit)
             if (n > 255) Left(Seq("octal escape sequences cannot be greater than 0377 (255 in decimal)"))
             else Right(n)
         }
-        val numeric = 'x' ~> hexCode | '0' ~> octCode
+        val numeric = 'x' ~> hexCodeEscX | '0' ~> octCode | 'u' ~> hexFixedEscU
         // `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
         val control = 'c' ~> empty
         val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b).toList.map(_ as _)*)
