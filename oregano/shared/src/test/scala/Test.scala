@@ -6,8 +6,12 @@
 package test
 
 import oregano.regex
+// import oregano.runtimeRegex
 
 @main def test() = {
-    val reg = regex("abc|d.e[0-9]")
-    println(reg.matches("abc"))
+    val compiletime = "ab|\\t".regex
+    println(compiletime.matches("abc"))
+    // val uninlined = "abc"
+    // val runtime = uninlined.runtimeRegex
+    // println(runtime.matches("abc"))
 }
