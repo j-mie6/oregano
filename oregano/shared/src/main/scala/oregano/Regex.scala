@@ -1,8 +1,8 @@
-// /*
-//  * Copyright 2024 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
-//  *
-//  * SPDX-License-Identifier: BSD-3-Clause
-//  */
+/*
+ * Copyright 2024 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 package oregano
 
 import scala.quoted.*
@@ -36,9 +36,9 @@ private def isInlineable(regExpr: Expr[String])(using Quotes): Expr[Regex[?]] = 
   }
 }
 
-// // FIXME: wrong type, not sure how I want to process the typesafe bit yet, ideally avoid duplication, but might have to :(
-// //transparent inline def regex/*[S <: String & Singleton]*/(inline regex: String): Regex[?] = ${compileMacro('regex)}
+// FIXME: wrong type, not sure how I want to process the typesafe bit yet, ideally avoid duplication, but might have to :(
+//transparent inline def regex/*[S <: String & Singleton]*/(inline regex: String): Regex[?] = ${compileMacro('regex)}
 
-// // this, annoyingly, has to be here or else the splice above complains that it's in a different scope
+// this, annoyingly, has to be here or else the splice above complains that it's in a different scope
 private def compileMacro(s: Expr[String])(using Quotes): Expr[Regex[?]] =
   internal.compileMacro(s.valueOrAbort)

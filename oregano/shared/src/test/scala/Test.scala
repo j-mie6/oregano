@@ -6,7 +6,6 @@
 package test
 
 import oregano.regex
-// import oregano.runtimeRegex
 
 @main def test() = {
     val compiletime = "ab|\\t".regex
