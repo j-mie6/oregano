@@ -16,7 +16,11 @@ object Regex {
   // Fallback method for runtime regexes
   def runtime(s: String): Regex[?] = new Regex[List[String]] {
     private val compiled = s.r
-    def matches(input: CharSequence): Boolean = compiled.matches(input)
+    // private val pattern = internal.Pattern.compile(internal.parse(s).)
+    // def matches(input: CharSequence): Boolean = compiled.matches(input)
+    def matches(input: CharSequence): Boolean = {
+      internal.Pattern.compile(s).matches(input)
+    }
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }
 }
