@@ -6,6 +6,7 @@
 package oregano.internal
 
 import scala.quoted.*
+import oregano.internal.Pattern.matchPattern
 
 private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[?]] = {
     import quotes.reflect.report
@@ -13,14 +14,14 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
     case Right(ast) =>
         // report.info(s"$ast")
         val p = Pattern.compile(ast)
-        // report.info(s"$p")
         report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
         '{
             // just do compile-time checks for now!
             new oregano.Regex[List[String]] {
                 val regex = ${Expr(s)}.r
+                // def matches(input: CharSequence): Boolean = regex.matches(input)
                 def matches(input: CharSequence): Boolean = {
-                    val endPos: Int = ${ inlineMatchExpr(p, '{input}, '{0}) }
+                    val endPos: Int = ${ matchPattern(p, '{input}, '{0}) }
                     return endPos == input.length
                 }
                 def unapplySeq(input: CharSequence): Option[List[String]] = regex.unapplySeq(input)
