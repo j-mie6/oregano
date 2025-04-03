@@ -15,9 +15,11 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
         // report.info(s"$ast")
         val p = Pattern.compile(ast)
         report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
+        val prog = ProgramCompiler.compileRegexp(p)
         '{
             // just do compile-time checks for now!
             new oregano.Regex[List[String]] {
+                val liftedProg = ${Expr(prog)} // in practice we want this to be in an object
                 val regex = ${Expr(s)}.r
                 // def matches(input: CharSequence): Boolean = regex.matches(input)
                 def matches(input: CharSequence): Boolean = {

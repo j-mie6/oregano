@@ -1,9 +1,25 @@
 package oregano.internal
 
 import scala.collection.mutable.ArrayBuffer
+import scala.quoted.*
+
+given ToExpr[Prog] with
+  def apply(prog: Prog)(using Quotes): Expr[Prog] = {
+    val instList: List[Inst] = prog.insts.take(prog.numInst).toList
+    val instExprs: Expr[List[Inst]] = Expr.ofList(instList.map(Expr(_)))
+    
+    '{
+      val p = new Prog()
+      // Rebuild the mutable ArrayBuffer from the lifted list
+      p.insts = ArrayBuffer.from($instExprs)
+      p.start = ${ Expr(prog.start) }
+      p.numCap = ${ Expr(prog.numCap) }
+      p
+    }
+  }
 
 final class Prog {
-  private val insts = ArrayBuffer.empty[Inst]
+  var insts = ArrayBuffer.empty[Inst]
   var start: Int = 0
   var numCap: Int = 2 // default: full match group $0
 
@@ -123,4 +139,8 @@ final class Prog {
       f"$pc$mark%-3s  ${inst.toString}"
     }.mkString("\n")
   }
+}
+
+object Prog {
+  def apply(): Prog = new Prog()
 }

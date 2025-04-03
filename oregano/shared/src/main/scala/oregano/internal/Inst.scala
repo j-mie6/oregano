@@ -1,5 +1,7 @@
 package oregano.internal
 
+import scala.quoted.*
+
 // TODO: move elsewhere?
 // Escape everything but bread and butter ASCII, kind of a jackhammer 
 // approach but who cares about stringification performance
@@ -8,6 +10,11 @@ private[internal] def escapeRune(sb: StringBuilder, r: Int): Unit = {
     else sb.append(f"\\u${r}%04x")
   }
 
+
+given ToExpr[InstOp] with
+  def apply(op: InstOp)(using Quotes): Expr[InstOp] =
+    Expr(op)
+
 enum InstOp:
     case ALT, ALT_MATCH, CAPTURE, EMPTY_WIDTH, FAIL, MATCH, NOP,
         RUNE, RUNE1, RUNE_ANY, RUNE_ANY_NOT_NL
@@ -15,6 +22,17 @@ enum InstOp:
 object InstOp:
   def isRuneOp(op: InstOp): Boolean =
     op.ordinal >= InstOp.RUNE.ordinal && op.ordinal <= InstOp.RUNE_ANY_NOT_NL.ordinal
+
+given ToExpr[Inst] with
+  def apply(inst: Inst)(using Quotes): Expr[Inst] =
+    '{
+      new Inst(
+        op    = ${ Expr(inst.op) },
+        out   = ${ Expr(inst.out) },
+        arg   = ${ Expr(inst.arg) },
+        runes = ${ Expr(inst.runes.toList) }.toArray
+      )
+    }
 
 case class Inst(
   var op: InstOp,

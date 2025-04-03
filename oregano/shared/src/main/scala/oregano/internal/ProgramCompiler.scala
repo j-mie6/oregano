@@ -1,5 +1,7 @@
 package oregano.internal
 
+import cats.collections.Diet
+
 // PLACEHOLDER:
 val MAX_RUNE = 0x10FFFF
 
@@ -9,8 +11,14 @@ final case class Frag(
   nullable: Boolean = false
 )
 
-class Compiler {
-  private val prog = new Prog()
+def dietToRanges(diet: Diet[Int]): List[Int] = {
+  diet.toIterator.foldLeft(List.empty[Int]) { (acc, range) =>
+    acc :+ range.start :+ range.end
+  }.toList
+}
+
+class ProgramCompiler {
+  private val prog = Prog()
 
   // always insert FAIL as first instruction
   prog.addInst(InstOp.FAIL)
@@ -130,8 +138,9 @@ class Compiler {
     case Pattern.Lit(c) =>
         rune(c, 0)
     case Pattern.Class(diet) =>
-        val runes = diet.toList.sorted
-        val pairs = runes.sliding(2, 2).flatMap {
+        // val runes = diet.toList.sorted
+        val runes = dietToRanges(diet)
+        val pairs: Array[Int] = runes.sliding(2, 2).flatMap {
             case List(lo, hi) => Seq(lo, hi)
             case List(single) => Seq(single, single)
             case List(_, _, _, _*) => Seq.empty
@@ -191,13 +200,18 @@ class Compiler {
 //       }.getOrElse(nop())
 //   }
 
-object Compiler {
-  def apply(): Compiler = new Compiler()
+object ProgramCompiler {
+  def apply(): ProgramCompiler = new ProgramCompiler()
+
+  def compileRegexp(re: Pattern): Prog = {
+    val compiler = ProgramCompiler()
+    compiler.compileRegexp(re)
+  }
 }
 
 @main def testProgramCompiler(): Unit = {
-  import oregano.internal.Pattern._
-  val pattern = Alt(Cat(List(Lit(97))),Alt(Cat(List(Lit(98))),Cat(List(Lit(99)))))
-  val frag = Compiler().compileRegexp(pattern)
+  val regex = "[a-zAZ]"
+  val pattern = Pattern.compile(regex)
+  val frag = ProgramCompiler.compileRegexp(pattern)
   println(frag)
 }
