@@ -12,8 +12,18 @@ private[internal] def escapeRune(sb: StringBuilder, r: Int): Unit = {
 
 
 given ToExpr[InstOp] with
-  def apply(op: InstOp)(using Quotes): Expr[InstOp] =
-    Expr(op)
+  def apply(op: InstOp)(using Quotes): Expr[InstOp] = op match
+    case InstOp.ALT              => '{ InstOp.ALT }
+    case InstOp.ALT_MATCH        => '{ InstOp.ALT_MATCH }
+    case InstOp.CAPTURE          => '{ InstOp.CAPTURE }
+    case InstOp.EMPTY_WIDTH      => '{ InstOp.EMPTY_WIDTH }
+    case InstOp.FAIL             => '{ InstOp.FAIL }
+    case InstOp.MATCH            => '{ InstOp.MATCH }
+    case InstOp.NOP              => '{ InstOp.NOP }
+    case InstOp.RUNE             => '{ InstOp.RUNE }
+    case InstOp.RUNE1            => '{ InstOp.RUNE1 }
+    case InstOp.RUNE_ANY         => '{ InstOp.RUNE_ANY }
+    case InstOp.RUNE_ANY_NOT_NL  => '{ InstOp.RUNE_ANY_NOT_NL }   
 
 enum InstOp:
     case ALT, ALT_MATCH, CAPTURE, EMPTY_WIDTH, FAIL, MATCH, NOP,
@@ -25,12 +35,13 @@ object InstOp:
 
 given ToExpr[Inst] with
   def apply(inst: Inst)(using Quotes): Expr[Inst] =
+    val runesExpr = Expr.ofList(inst.runes.toList.map(Expr(_)))
     '{
       new Inst(
         op    = ${ Expr(inst.op) },
         out   = ${ Expr(inst.out) },
         arg   = ${ Expr(inst.arg) },
-        runes = ${ Expr(inst.runes.toList) }.toArray
+        runes = $runesExpr.toArray
       )
     }
 
