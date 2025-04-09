@@ -2,6 +2,13 @@ package oregano.internal
 
 import scala.quoted.*
 
+/* 
+ALT_MATCH unused in RE2J, could just nix it
+ 
+Currently, uses enum as original: may be merit to moving to a case class? 
+Main argument against (which I think is strong) is that mutability is nice for out/arg
+*/
+
 // TODO: move elsewhere?
 // Escape everything but bread and butter ASCII, kind of a jackhammer 
 // approach but who cares about stringification performance
@@ -60,7 +67,7 @@ case class Inst(
     //   if (arg & RE2.FOLD_CASE) != 0 then 
     //     Unicode.equalsIgnoreCase(r0, r)
     //   else 
-        r == r0
+      r == r0
     else
       // Fast check first few ranges
       var j = 0
