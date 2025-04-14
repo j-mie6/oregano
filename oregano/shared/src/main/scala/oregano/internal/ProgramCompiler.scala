@@ -218,7 +218,7 @@ object ProgramCompiler {
 }
 
 @main def testProgramCompiler(): Unit = {
-  val regex = "a*"
+  val regex = "a*b|c"
   val pattern = Pattern.compile(regex)
   val frag = ProgramCompiler.compileRegexp(pattern)
   println(frag)

@@ -20,13 +20,13 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
         '{
             // just do compile-time checks for now!
             new oregano.Regex[List[String]] {
-                val liftedProg = $liftedProgExpr // in practice we want this to be in an object
                 val regex = ${Expr(s)}.r
+                val matcher = Matcher($liftedProgExpr)
                 // def matches(input: CharSequence): Boolean = regex.matches(input)
                 def matches(input: CharSequence): Boolean = {
                     // val endPos: Int = ${ matchPattern(p, '{input}, '{0}) }
                     // return endPos == input.length
-                    regex.matches(input)
+                    matcher.matches(input)
                 }
                 def unapplySeq(input: CharSequence): Option[List[String]] = regex.unapplySeq(input)
             }

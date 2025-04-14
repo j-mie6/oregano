@@ -5,41 +5,69 @@ final case class Thread(pc: Int, pos: Int)
 class Matcher(prog: Prog) {
   case class Thread(pc: Int, pos: Int)
 
-  def matches(input: CharSequence): Boolean = {
-    var current = List(Thread(prog.start, 0))
+  def matches(input: CharSequence): Boolean =
+    val inputLength = input.length
+
+    val current     = scala.collection.mutable.ListBuffer.empty[Thread]
+    val next        = scala.collection.mutable.ListBuffer.empty[Thread]
+    val visited     = scala.collection.mutable.Set.empty[(Int, Int)]
+    val nextVisited = scala.collection.mutable.Set.empty[(Int, Int)]
+
+    inline def add(pc: Int, pos: Int): Unit =
+        val key = (pc, pos)
+        if !visited.contains(key) then
+        visited += key
+        current += Thread(pc, pos)
+
+    add(prog.start, 0)
 
     while current.nonEmpty do
-      val next = scala.collection.mutable.ListBuffer.empty[Thread]
+      next.clear()
+      nextVisited.clear()
 
-      for t <- current do
-        if t.pos > input.length then
-          ()
-        else
-          val inst = prog.getInst(t.pc)
+      var i = 0
+        while i < current.size do
+          val Thread(pc, pos) = current(i)
+          val inst = prog.getInst(pc)
           inst.op match
-            case InstOp.FAIL =>
-              ()
+            case InstOp.FAIL => ()
 
             case InstOp.MATCH =>
-              if t.pos == input.length then return true
+              if pos == inputLength then return true
 
             case InstOp.NOP =>
-              next += Thread(inst.out, t.pos)
+              val out = (inst.out, pos)
+              if !visited.contains(out) && !nextVisited.contains(out) then
+                  next += Thread(inst.out, pos)
+                  nextVisited += out
 
             case InstOp.ALT =>
-              next += Thread(inst.out, t.pos)
-              next += Thread(inst.arg, t.pos)
+              val o = (inst.out, pos)
+              val a = (inst.arg, pos)
+              if !visited.contains(o) && !nextVisited.contains(o) then
+                  next += Thread(inst.out, pos)
+                  nextVisited += o
+              if !visited.contains(a) && !nextVisited.contains(a) then
+                  next += Thread(inst.arg, pos)
+                  nextVisited += a
 
-            case InstOp.RUNE =>
-              if t.pos < input.length && inst.matchRune(input.charAt(t.pos).toInt) then
-                next += Thread(inst.out, t.pos + 1)
+            case InstOp.RUNE | InstOp.RUNE1 =>
+              if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
+                  val key = (inst.out, pos + 1)
+                  if !visited.contains(key) && !nextVisited.contains(key) then
+                  next += Thread(inst.out, pos + 1)
+                  nextVisited += key
 
             case _ =>
-              throw new IllegalArgumentException(s"Unsupported inst: $inst")
+              throw new RuntimeException(s"Unsupported op: ${inst.op}")
+          i += 1
 
-      current = next.toList
+        current.clear()
+        current ++= next
+        visited.clear()
+        visited ++= nextVisited
+
     false
-  }
 }
 
 @main def vmTest: Unit = {
@@ -78,4 +106,13 @@ class Matcher(prog: Prog) {
   println(classMatcher.matches("z"))  // true
   println(classMatcher.matches("A"))  // false
   println(classMatcher.matches("0"))  // false
+
+  println("\nKleene Star:")
+  val starPattern = Pattern.compile("a*b")
+  val starProg = ProgramCompiler.compileRegexp(starPattern)
+  val starMatcher = new Matcher(starProg)
+  println(starMatcher.matches("ab"))  // true
+  println(starMatcher.matches("aab")) // true
+  println(starMatcher.matches(""))   // false
+  println(starMatcher.matches("b"))  // true
 }
