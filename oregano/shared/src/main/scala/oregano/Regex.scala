@@ -19,7 +19,8 @@ object Regex {
     // private val pattern = internal.Pattern.compile(internal.parse(s).)
     // def matches(input: CharSequence): Boolean = compiled.matches(input)
     def matches(input: CharSequence): Boolean = {
-      internal.Pattern.compile(s).matches(input)
+    //   internal.Pattern.compile(s).matches(input)
+        compiled.matches(input)
     }
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }

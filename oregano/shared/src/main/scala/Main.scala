@@ -5,7 +5,7 @@ import oregano.regex
 object Main {
   def main(args: Array[String]): Unit = {
     // inline val regEx = "\\u0061\\0142c|def|ghi"
-    inline val regEx = "abc|def|ghi"
+    inline val regEx = "a*b*"
     println("Current inlined regex: " + regEx)
         val compileTime = regEx.regex
     println(s"matches \"abc\": ${compileTime.matches("abc")}")

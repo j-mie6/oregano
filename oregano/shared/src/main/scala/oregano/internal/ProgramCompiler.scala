@@ -25,7 +25,7 @@ class ProgramCompiler {
 
   def compileRegexp(re: Pattern): Prog = {
     val f = compile(re)
-    prog.patch(f.out, prog.addInst(InstOp.MATCH))
+    prog.patch(f.out, newInst(InstOp.MATCH).i)
     prog.start = f.i
     prog
   }
@@ -67,36 +67,37 @@ class ProgramCompiler {
     Frag(f.i, merged, f1.nullable || f2.nullable)
   }
 
-//   private def loop(f1: Frag, nongreedy: Boolean): Frag = {
-//     val f = newInst(InstOp.ALT)
-//     val i = prog.getInst(f.i)
-//     if nongreedy then
-//       i.arg = f1.i
-//       f.copy(out = f.i << 1)
-//     else
-//       i.out = f1.i
-//       f.copy(out = (f.i << 1) | 1)
-//     prog.patch(f1.out, f.i)
-//     f
-//   }
+  private def loop(f1: Frag, nongreedy: Boolean): Frag = {
+    val f = newInst(InstOp.ALT)
+    val i = prog.getInst(f.i)
+    if nongreedy then
+      i.arg = f1.i
+      prog.patch(f1.out, f.i)
+      Frag(f.i, f.i << 1, nullable = true)
+    else
+      i.out = f1.i
+      prog.patch(f1.out, f.i)
+      Frag(f.i, (f.i << 1) | 1, nullable = true)
+  }
 
-//   private def quest(f1: Frag, nongreedy: Boolean): Frag = {
-//     val f = newInst(InstOp.ALT)
-//     val i = prog.getInst(f.i)
-//     if nongreedy then
-//       i.arg = f1.i
-//       f.copy(out = prog.append(f.i << 1, f1.out))
-//     else
-//       i.out = f1.i
-//       f.copy(out = prog.append((f.i << 1) | 1, f1.out))
-//   }
+  private def quest(f1: Frag, nongreedy: Boolean): Frag = {
+    val f = newInst(InstOp.ALT)
+    val i = prog.getInst(f.i)
+    val patchedOut = if nongreedy then
+      i.arg = f1.i
+      prog.append(f.i << 1, f1.out)
+    else
+      i.out = f1.i
+      prog.append((f.i << 1) | 1, f1.out)
+    Frag(f.i, patchedOut, nullable = true)
+  }
 
-//   private def plus(f1: Frag, nongreedy: Boolean): Frag =
-//     Frag(f1.i, loop(f1, nongreedy).out, f1.nullable)
+  private def plus(f1: Frag, nongreedy: Boolean): Frag =
+    Frag(f1.i, loop(f1, nongreedy).out, f1.nullable)
 
-//   private def star(f1: Frag, nongreedy: Boolean): Frag =
-//     if f1.nullable then quest(plus(f1, nongreedy), nongreedy)
-//     else loop(f1, nongreedy)
+  private def star(f1: Frag, nongreedy: Boolean): Frag =
+    if f1.nullable then quest(plus(f1, nongreedy), nongreedy)
+    else loop(f1, nongreedy)
 
 //   private def empty(op: Int): Frag = {
 //     val f = newInst(InstOp.EMPTY_WIDTH)
@@ -156,6 +157,13 @@ class ProgramCompiler {
 
     case Pattern.Alt(left, right) =>
         alt(compile(left), compile(right))
+
+    case Pattern.Rep0(pat) => 
+        val f = compile(pat)
+        if f.nullable then
+          quest(f, false)
+        else
+          star(f, false)
   }
 }
 //     case RegexpOp.NO_MATCH      => fail()
@@ -183,7 +191,7 @@ class ProgramCompiler {
 //       val ket = cap(re.cap << 1 | 1)
 //       cat(cat(bra, sub), ket)
 
-//     case RegexpOp.STAR   => star(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
+    // case RegexpOp.STAR   => star(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
 //     case RegexpOp.PLUS   => plus(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
 //     case RegexpOp.QUEST  => quest(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
 
@@ -210,7 +218,7 @@ object ProgramCompiler {
 }
 
 @main def testProgramCompiler(): Unit = {
-  val regex = "[a-zAZ]"
+  val regex = "a*"
   val pattern = Pattern.compile(regex)
   val frag = ProgramCompiler.compileRegexp(pattern)
   println(frag)
