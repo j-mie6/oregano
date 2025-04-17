@@ -68,7 +68,7 @@ class ProgramCompiler {
   }
 
   private def loop(f1: Frag, nongreedy: Boolean): Frag = {
-    val f = newInst(InstOp.ALT)
+    val f = newInst(InstOp.LOOP)
     val i = prog.getInst(f.i)
     if nongreedy then
       i.arg = f1.i
@@ -218,7 +218,7 @@ object ProgramCompiler {
 }
 
 @main def testProgramCompiler(): Unit = {
-  val regex = "a*b|c"
+  val regex = "a*b"
   val pattern = Pattern.compile(regex)
   val frag = ProgramCompiler.compileRegexp(pattern)
   println(frag)

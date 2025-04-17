@@ -31,10 +31,11 @@ given ToExpr[InstOp] with
     case InstOp.RUNE1            => '{ InstOp.RUNE1 }
     case InstOp.RUNE_ANY         => '{ InstOp.RUNE_ANY }
     case InstOp.RUNE_ANY_NOT_NL  => '{ InstOp.RUNE_ANY_NOT_NL }   
+    case InstOp.LOOP             => '{ InstOp.LOOP }
 
 enum InstOp:
     case ALT, ALT_MATCH, CAPTURE, EMPTY_WIDTH, FAIL, MATCH, NOP,
-        RUNE, RUNE1, RUNE_ANY, RUNE_ANY_NOT_NL
+        RUNE, RUNE1, RUNE_ANY, RUNE_ANY_NOT_NL, LOOP
 
 object InstOp:
   def isRuneOp(op: InstOp): Boolean =
@@ -59,7 +60,6 @@ case class Inst(
   var runes: Array[Int] = Array.empty
 ) {
 
-  /** Returns true if this instruction matches (and consumes) the given rune. */
   def matchRune(r: Int): Boolean =
     if runes.length == 1 then
       val r0 = runes(0)
@@ -109,6 +109,100 @@ case class Inst(
       s"any -> $out"
     case InstOp.RUNE_ANY_NOT_NL =>
       s"anynotnl -> $out"
+    case InstOp.LOOP =>
+      s"loop -> $out, $arg"
+
+  def matchRuneExpr(using Quotes): Expr[Int => Boolean] =
+    if runes.length == 1 then
+      val lit = runes(0)
+      '{ (r: Int) => r == ${Expr(lit)} }
+
+    else
+      val pairs = runes.grouped(2).collect {
+        case Array(lo, hi) => (lo, hi)
+        case Array(single) => (single, single)
+      }.toList
+
+      if pairs.length <= 4 then
+        '{
+          (r: Int) => ${
+            val conditions = pairs.map { case (lo, hi) =>
+              if lo == hi then
+                '{ r == ${Expr(lo)} }
+              else
+                '{ r >= ${Expr(lo)} && r <= ${Expr(hi)} }
+            }
+            conditions.reduceLeft((a, b) => '{ $a || $b })
+          }
+        }
+      else
+        // Fallback: binary search over ranges
+        val pairsExpr = Expr.ofList(pairs.map { case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) })
+        '{
+          val pairs = $pairsExpr
+          (r: Int) =>
+            var ret = false
+            var lo = 0
+            var hi = pairs.length
+            while lo < hi do
+              val m = lo + (hi - lo) / 2
+              val (rlo, rhi) = pairs(m)
+              if r < rlo then hi = m
+              else if r > rhi then lo = m + 1
+              ret = true
+              lo = hi
+            ret
+        }
+
+//   /** Returns true if this instruction matches (and consumes) the given rune. */
+//   def matchRuneExpr(inst: Inst)(using Quotes): Expr[Int => Boolean] =
+//     val runes = inst.runes
+
+//     if runes.length == 1 then
+//       val r0 = runes(0)
+//       // Literal equality check
+//       '{ (r: Int) => r == ${Expr(r0)} }
+
+//     else
+//       // Generate code for fast linear scan first, then fallback to binary search
+//       val earlyCheckExprs = runes.grouped(2).take(4).map {
+//         case Array(lo, hi) =>
+//           '{ (r: Int) => r >= ${Expr(lo)} && r <= ${Expr(hi)} }
+//         case _ => '{ (_: Int) => false }
+//       }.toList
+
+//       // Binary search expression
+//       val pairs = runes.grouped(2).toArray
+//       val binarySearchExpr =
+//         '{
+//           (r: Int) =>
+//             var ret = false
+//             var lo = 0
+//             var hi = ${Expr(pairs.length)}
+//             while lo < hi do
+//               val m = lo + (hi - lo) / 2
+//               val rlo = ${Expr(pairs)}(m)(0)
+//               val rhi = ${Expr(pairs)}(m)(1)
+//               if r < rlo then hi = m
+//               else if (r > rhi) then lo = m + 1
+//               else 
+//                 ret = true
+//                 break
+//             ret
+//         }
+
+//       // Combine early exit with fallback binary search
+//       val combined =
+//         earlyCheckExprs.reduceLeftOption { (acc, next) =>
+//           '{ (r: Int) => ${acc}(r) || ${next}(r) }
+//         }.getOrElse('{ (_: Int) => false })
+
+//       // Wrap in full check
+//       '{
+//         (r: Int) =>
+//           if ${combined}(r) then true
+//           else ${binarySearchExpr}(r)
+//       }
 
   private def escapeRunes(runes: Array[Int]): String =
     val sb = new StringBuilder("\"")

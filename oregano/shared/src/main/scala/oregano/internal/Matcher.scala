@@ -2,12 +2,15 @@ package oregano.internal
 
 final case class Thread(pc: Int, pos: Int)
 
-class Matcher(prog: Prog) {
+object Matcher {
   case class Thread(pc: Int, pos: Int)
 
-  def matches(input: CharSequence): Boolean =
+  def matches(prog: Prog, input: CharSequence): Boolean =
     val inputLength = input.length
 
+    // could look at using more terse datastructures, 
+    // intuitively these are bound by PC (already finitely enumrated)
+    // jamie suggested bitset, for example.
     val current     = scala.collection.mutable.ListBuffer.empty[Thread]
     val next        = scala.collection.mutable.ListBuffer.empty[Thread]
     val visited     = scala.collection.mutable.Set.empty[(Int, Int)]
@@ -74,45 +77,40 @@ class Matcher(prog: Prog) {
   println("Basic alternation:")
   val basicPattern = Pattern.compile("a|b")
   val basicProg = ProgramCompiler.compileRegexp(basicPattern)
-  val basicMatcher = new Matcher(basicProg)
 
-  println(basicMatcher.matches("a")) // true
-  println(basicMatcher.matches("b")) // true
-  println(basicMatcher.matches("c")) // false
-  println(basicMatcher.matches(""))  // false
+  println(Matcher.matches(basicProg, "a")) // true
+  println(Matcher.matches(basicProg, "b")) // true
+  println(Matcher.matches(basicProg, "c")) // false
+  println(Matcher.matches(basicProg, ""))  // false
 
   println("\nConcatenation:")
   val concatPattern = Pattern.compile("ab")
   val concatProg = ProgramCompiler.compileRegexp(concatPattern)
-  val concatMatcher = new Matcher(concatProg)
-  println(concatMatcher.matches("ab"))  // true
-  println(concatMatcher.matches("a"))   // false
-  println(concatMatcher.matches("abc")) // false
+  println(Matcher.matches(concatProg, "ab"))  // true
+  println(Matcher.matches(concatProg, "a"))   // false
+  println(Matcher.matches(concatProg, "abc")) // false
 
   println("\nLiteral + alternation:")
   val complex = Pattern.compile("ab|cd")
   val complexProg = ProgramCompiler.compileRegexp(complex)
-  val complexMatcher = new Matcher(complexProg)
-  println(complexMatcher.matches("ab")) // true
-  println(complexMatcher.matches("cd")) // true
-  println(complexMatcher.matches("ac")) // false
-  println(complexMatcher.matches("abcd")) // false
+  println(Matcher.matches(complexProg, "ab")) // true
+  println(Matcher.matches(complexProg, "cd")) // true
+  println(Matcher.matches(complexProg, "ac")) // false
+  println(Matcher.matches(complexProg, "abcd")) // false
 
   println("\nCharacter class:")
   val classPattern = Pattern.compile("[a-z]")
   val classProg = ProgramCompiler.compileRegexp(classPattern)
-  val classMatcher = new Matcher(classProg)
-  println(classMatcher.matches("a"))  // true
-  println(classMatcher.matches("z"))  // true
-  println(classMatcher.matches("A"))  // false
-  println(classMatcher.matches("0"))  // false
+  println(Matcher.matches(classProg, "a"))  // true
+  println(Matcher.matches(classProg, "z"))  // true
+  println(Matcher.matches(classProg, "A"))  // false
+  println(Matcher.matches(classProg, "0"))  // false
 
   println("\nKleene Star:")
   val starPattern = Pattern.compile("a*b")
   val starProg = ProgramCompiler.compileRegexp(starPattern)
-  val starMatcher = new Matcher(starProg)
-  println(starMatcher.matches("ab"))  // true
-  println(starMatcher.matches("aab")) // true
-  println(starMatcher.matches(""))   // false
-  println(starMatcher.matches("b"))  // true
+  println(Matcher.matches(starProg, "ab"))  // true
+  println(Matcher.matches(starProg, "aab")) // true
+  println(Matcher.matches(starProg, ""))   // false
+  println(Matcher.matches(starProg, "b"))  // true
 }
