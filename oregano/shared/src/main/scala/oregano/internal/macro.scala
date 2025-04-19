@@ -17,8 +17,9 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
         // report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
         val prog = ProgramCompiler.compileRegexp(p)
         // val liftedProgExpr = Expr(prog)
-        val matcherExpr = VMCodegen.genMatcher(prog)
+        // val matcherExpr = VMCodegen.genMatcher(prog)
         // val matcherExpr = VMCodegenCPS.genMatcher(prog)
+        val matcherExpr = VMCodegenLinear.genMatcher(prog)
         quotes.reflect.report.info(matcherExpr.show)
         '{
             // just do compile-time checks for now!

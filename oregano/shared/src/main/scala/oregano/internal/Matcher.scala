@@ -9,12 +9,12 @@ object Matcher {
     val inputLength = input.length
 
     // could look at using more terse datastructures, 
-    // intuitively these are bound by PC (already finitely enumrated)
+    // intuitively these are bound by PC (already finitely enumerated)
     // jamie suggested bitset, for example.
-    val current     = scala.collection.mutable.ListBuffer.empty[Thread]
-    val next        = scala.collection.mutable.ListBuffer.empty[Thread]
-    val visited     = scala.collection.mutable.Set.empty[(Int, Int)]
-    val nextVisited = scala.collection.mutable.Set.empty[(Int, Int)]
+    var current     = scala.collection.mutable.ListBuffer.empty[Thread]
+    var next        = scala.collection.mutable.ListBuffer.empty[Thread]
+    var visited     = scala.collection.mutable.Set.empty[(Int, Int)]
+    var nextVisited = scala.collection.mutable.Set.empty[(Int, Int)]
 
     inline def add(pc: Int, pos: Int): Unit =
         val key = (pc, pos)
@@ -44,7 +44,7 @@ object Matcher {
                   next += Thread(inst.out, pos)
                   nextVisited += out
 
-            case InstOp.ALT =>
+            case InstOp.ALT | InstOp.LOOP =>
               val o = (inst.out, pos)
               val a = (inst.arg, pos)
               if !visited.contains(o) && !nextVisited.contains(o) then
@@ -66,10 +66,13 @@ object Matcher {
           i += 1
 
         current.clear()
-        current ++= next
         visited.clear()
-        visited ++= nextVisited
-
+        val tempVisited = nextVisited
+        val tempCurrent = next
+        nextVisited = visited
+        next = current
+        current = tempCurrent
+        visited = tempVisited
     false
 }
 
@@ -107,7 +110,7 @@ object Matcher {
   println(Matcher.matches(classProg, "0"))  // false
 
   println("\nKleene Star:")
-  val starPattern = Pattern.compile("a*b")
+  val starPattern = Pattern.compile("(a|b)*ab")
   val starProg = ProgramCompiler.compileRegexp(starPattern)
   println(Matcher.matches(starProg, "ab"))  // true
   println(Matcher.matches(starProg, "aab")) // true
