@@ -36,6 +36,7 @@ object VMCodegenLinear:
         case InstOp.MATCH =>
           '{
             (pos, input, queue, visited) =>
+              // very ugly, need to think about return type a bit
               if pos == input.length then throw new scala.util.control.ControlThrowable("MATCH") {}
           }
 

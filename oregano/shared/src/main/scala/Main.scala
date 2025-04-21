@@ -6,7 +6,7 @@ import oregano.internal.makeMatch
 object Main {
   def main(args: Array[String]): Unit = {
     // inline val regEx = "\\u0061\\0142c|def|ghi"
-    inline val regEx = "ababc"
+    inline val regEx = "(ab)*abc|def"
     println("Current inlined regex: " + regEx)
     val compileTime = regEx.regex
     println(s"matches \"ababc\": ${compileTime.matches("ababc")}")
