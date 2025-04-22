@@ -1,79 +1,90 @@
 package oregano.internal
 
-final case class Thread(pc: Int, pos: Int)
+// may want something mutable, so can preallocate instead
+// note that re2j stores an inst, one less layer of indirection
+// case class Thread(pc: Int, pos: Int) 
+
+final case class Thread(inst: Inst, pos: Int) 
+
+private final class ThreadQueue(n: Int):
+  val sparse = new Array[Int](n)
+  val densePcs = new Array[Int](n)
+  val denseThreads = new Array[Option[Thread]](n)
+  var size = 0
+
+  def isEmpty: Boolean = size == 0
+
+  def contains(pc: Int): Boolean =
+    val j = sparse(pc)
+    j < size && densePcs(j) == pc
+
+  def add(pc: Int): Int =
+    val j = size
+    sparse(pc) = j
+    densePcs(j) = pc
+    denseThreads(j) = None
+    size += 1
+    j
+
+  def clear(): Unit =
+    size = 0
+
+  def getThread(i: Int): Option[Thread] = denseThreads(i)
+  def setThread(i: Int, t: Thread): Unit = denseThreads(i) = Some(t)
+
+  override def toString: String =
+    densePcs.take(size).mkString("{", ", ", "}")
 
 object Matcher {
-  case class Thread(pc: Int, pos: Int)
-
   def matches(prog: Prog, input: CharSequence): Boolean =
     val inputLength = input.length
+    var runq = ThreadQueue(prog.numInst)
+    var nextq = ThreadQueue(prog.numInst)
 
-    // could look at using more terse datastructures, 
-    // intuitively these are bound by PC (already finitely enumerated)
-    // jamie suggested bitset, for example.
-    var current     = scala.collection.mutable.ListBuffer.empty[Thread]
-    var next        = scala.collection.mutable.ListBuffer.empty[Thread]
-    var visited     = scala.collection.mutable.Set.empty[(Int, Int)]
-    var nextVisited = scala.collection.mutable.Set.empty[(Int, Int)]
+    def add(q: ThreadQueue, pc: Int, pos: Int): Unit =
+      // println(s"add($pc, $pos, ${prog.getInst(pc)})")
+      if (!q.contains(pc))
+        val inst = prog.getInst(pc)
+        inst.op match
+          case InstOp.FAIL => ()
+          case InstOp.NOP  => add(q, inst.out, pos)
+          case InstOp.ALT | InstOp.LOOP =>
+            add(q, inst.out, pos)
+            add(q, inst.arg, pos)
+          case _ =>
+            val id = q.add(pc)
+            q.setThread(id, Thread(inst, pos)) // optional: if storing Thread object
 
-    inline def add(pc: Int, pos: Int): Unit =
-        val key = (pc, pos)
-        if !visited.contains(key) then
-        visited += key
-        current += Thread(pc, pos)
-
-    add(prog.start, 0)
-
-    while current.nonEmpty do
-      next.clear()
-      nextVisited.clear()
-
+    def step(runq: ThreadQueue, nextq: ThreadQueue): Boolean =
       var i = 0
-        while i < current.size do
-          val Thread(pc, pos) = current(i)
-          val inst = prog.getInst(pc)
-          inst.op match
-            case InstOp.FAIL => ()
+      while i < runq.size do
+        runq.getThread(i) match
+          case Some(Thread(inst, pos)) =>
+            inst.op match
+              case InstOp.MATCH =>
+                if pos == inputLength then return true
 
-            case InstOp.MATCH =>
-              if pos == inputLength then return true
+              case InstOp.RUNE | InstOp.RUNE1 =>
+                if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
+                  add(nextq, inst.out, pos + 1)
 
-            case InstOp.NOP =>
-              val out = (inst.out, pos)
-              if !visited.contains(out) && !nextVisited.contains(out) then
-                  next += Thread(inst.out, pos)
-                  nextVisited += out
+              case _ =>
+                throw new RuntimeException(s"Unexpected opcode in step: ${inst.op}")
+          case None => ()
+        i += 1
+      false
 
-            case InstOp.ALT | InstOp.LOOP =>
-              val o = (inst.out, pos)
-              val a = (inst.arg, pos)
-              if !visited.contains(o) && !nextVisited.contains(o) then
-                  next += Thread(inst.out, pos)
-                  nextVisited += o
-              if !visited.contains(a) && !nextVisited.contains(a) then
-                  next += Thread(inst.arg, pos)
-                  nextVisited += a
+    add(runq, prog.start, 0)
 
-            case InstOp.RUNE | InstOp.RUNE1 =>
-              if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
-                  val key = (inst.out, pos + 1)
-                  if !visited.contains(key) && !nextVisited.contains(key) then
-                  next += Thread(inst.out, pos + 1)
-                  nextVisited += key
+    var matched = false
+    while !matched && !runq.isEmpty do
+      matched = step(runq, nextq)
+      runq.clear()
+      val tmp = runq
+      runq = nextq
+      nextq = tmp
 
-            case _ =>
-              throw new RuntimeException(s"Unsupported op: ${inst.op}")
-          i += 1
-
-        current.clear()
-        visited.clear()
-        val tempVisited = nextVisited
-        val tempCurrent = next
-        nextVisited = visited
-        next = current
-        current = tempCurrent
-        visited = tempVisited
-    false
+    matched
 }
 
 @main def vmTest: Unit = {
