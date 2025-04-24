@@ -6,7 +6,7 @@ package oregano.internal
 
 final case class Thread(inst: Inst, pos: Int) 
 
-private final class ThreadQueue(n: Int):
+final class ThreadQueue(n: Int):
   val sparse = new Array[Int](n)
   val densePcs = new Array[Int](n)
   val denseThreads = new Array[Option[Thread]](n)
@@ -35,50 +35,54 @@ private final class ThreadQueue(n: Int):
   override def toString: String =
     densePcs.take(size).mkString("{", ", ", "}")
 
+class Matcher(prog: Prog, input: CharSequence) {
+  val inputLength = input.length()
+
+  def add(q: ThreadQueue, pc: Int, pos: Int): Unit =
+    // println(s"add($pc, $pos, ${prog.getInst(pc)})")
+    if (!q.contains(pc))
+      val inst = prog.getInst(pc)
+      inst.op match
+        case InstOp.FAIL => ()
+        case InstOp.NOP  => add(q, inst.out, pos)
+        case InstOp.ALT | InstOp.LOOP =>
+          add(q, inst.out, pos)
+          add(q, inst.arg, pos)
+        case _ =>
+          val id = q.add(pc)
+          q.setThread(id, Thread(inst, pos)) // optional: if storing Thread object
+
+  def step(runq: ThreadQueue, nextq: ThreadQueue): Boolean =
+    var i = 0
+    while i < runq.size do
+      runq.getThread(i) match
+        case Some(Thread(inst, pos)) =>
+          inst.op match
+            case InstOp.MATCH =>
+              if pos == inputLength then return true
+
+            case InstOp.RUNE | InstOp.RUNE1 =>
+              if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
+                add(nextq, inst.out, pos + 1)
+
+            case _ =>
+              throw new RuntimeException(s"Unexpected opcode in step: ${inst.op}")
+        case None => ()
+      i += 1
+    false
+}
+
 object Matcher {
   def matches(prog: Prog, input: CharSequence): Boolean =
-    val inputLength = input.length
+    val matcher = Matcher(prog, input)
     var runq = ThreadQueue(prog.numInst)
     var nextq = ThreadQueue(prog.numInst)
 
-    def add(q: ThreadQueue, pc: Int, pos: Int): Unit =
-      // println(s"add($pc, $pos, ${prog.getInst(pc)})")
-      if (!q.contains(pc))
-        val inst = prog.getInst(pc)
-        inst.op match
-          case InstOp.FAIL => ()
-          case InstOp.NOP  => add(q, inst.out, pos)
-          case InstOp.ALT | InstOp.LOOP =>
-            add(q, inst.out, pos)
-            add(q, inst.arg, pos)
-          case _ =>
-            val id = q.add(pc)
-            q.setThread(id, Thread(inst, pos)) // optional: if storing Thread object
-
-    def step(runq: ThreadQueue, nextq: ThreadQueue): Boolean =
-      var i = 0
-      while i < runq.size do
-        runq.getThread(i) match
-          case Some(Thread(inst, pos)) =>
-            inst.op match
-              case InstOp.MATCH =>
-                if pos == inputLength then return true
-
-              case InstOp.RUNE | InstOp.RUNE1 =>
-                if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
-                  add(nextq, inst.out, pos + 1)
-
-              case _ =>
-                throw new RuntimeException(s"Unexpected opcode in step: ${inst.op}")
-          case None => ()
-        i += 1
-      false
-
-    add(runq, prog.start, 0)
+    matcher.add(runq, prog.start, 0)
 
     var matched = false
     while !matched && !runq.isEmpty do
-      matched = step(runq, nextq)
+      matched = matcher.step(runq, nextq)
       runq.clear()
       val tmp = runq
       runq = nextq

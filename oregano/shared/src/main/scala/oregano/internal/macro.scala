@@ -17,8 +17,10 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
         // report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
         val prog = ProgramCompiler.compileRegexp(p)
         // val liftedProgExpr = Expr(prog)
-        val matcherExpr = VMCodegen.genMatcher(prog)
+        // val matcherExpr = VMCodegen.genMatcher(prog)
         // val matcherExpr = VMCodegenLinear.genMatcher(prog)
+        println(prog)
+        val matcherExpr = VMCodegenLinear.genMatcherRE2(prog)
         quotes.reflect.report.info(matcherExpr.show)
         '{
             // just do compile-time checks for now!
@@ -37,5 +39,5 @@ inline def testMatch: Int => Boolean = ${ testMatchImpl }
 def testMatchImpl(using Quotes): Expr[Int => Boolean] =
   val inst = Inst(InstOp.RUNE, 0, 0, Array(97, 98, 100, 101)) // "(abde)"
   val expr = inst.matchRuneExpr 
-  quotes.reflect.report.info(expr.show)
+  // quotes.reflect.report.info(expr.show)
   expr
