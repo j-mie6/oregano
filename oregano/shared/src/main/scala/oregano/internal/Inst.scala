@@ -2,7 +2,7 @@ package oregano.internal
 
 import scala.quoted.*
 
-/* 
+/*
 ALT_MATCH unused in RE2J, could just nix it
  
 Currently, uses enum as original: may be merit to moving to a case class? 
@@ -137,9 +137,10 @@ case class Inst(
         }
       else
         // Fallback: binary search over ranges
-        val pairsExpr = Expr.ofList(pairs.map { case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) })
+        val pairsArgsExpr = Varargs(pairs.map { case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) })
         '{
-          val pairs = $pairsExpr
+          // could potentially keep Inst around at runtime
+          val pairs = Array($pairsArgsExpr*)
           (r: Int) =>
             var ret = false
             var lo = 0

@@ -4,26 +4,7 @@ import scala.quoted.*
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-// def arrayExpr[T: Type](elems: Array[Expr[T]])(using Quotes): Expr[Array[T]] =
-//   import quotes.reflect.*
-// 
-//   println(s"Creating array of ${elems.mkString(", ")}")
-//   val arraySym = Symbol.requiredModule("scala.Array")
-//   println(s"Array symbol")
-//   val arrayTpe = TypeRepr.of[T]
-//   println(s"Array type")
-//   val arrayApply = Select.overloaded(
-//     qualifier = Ref(arraySym),
-//     name = "apply",
-//     targs = List(arrayTpe),
-//     args = List(Varargs(elems.toIndexedSeq).asTerm)
-//   )
-//   println(s"Array apply")
-//   val res = arrayApply.asExprOf[Array[T]]
-//   println("done")
-//   res
-
-object VMCodegenLinear:
+object VMCodegenBFS:
 
   def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
 

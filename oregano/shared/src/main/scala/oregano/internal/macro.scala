@@ -16,10 +16,10 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
         val p = Pattern.compile(ast)
         // report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
         val prog = ProgramCompiler.compileRegexp(p)
+        report.info(s"Prog:\n $prog")
         // val liftedProgExpr = Expr(prog)
         // val matcherExpr = VMCodegen.genMatcher(prog)
         // val matcherExpr = VMCodegenLinear.genMatcher(prog)
-        println(prog)
         val matcherExpr = VMCodegenLinear.genMatcherRE2(prog)
         quotes.reflect.report.info(matcherExpr.show)
         '{
@@ -37,7 +37,7 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
 inline def testMatch: Int => Boolean = ${ testMatchImpl }
 
 def testMatchImpl(using Quotes): Expr[Int => Boolean] =
-  val inst = Inst(InstOp.RUNE, 0, 0, Array(97, 98, 100, 101)) // "(abde)"
+  val inst = Inst(InstOp.RUNE, 0, 0, Array(97, 97, 98, 98, 99, 99, 100, 100, 101, 101)) // "(abde)"
   val expr = inst.matchRuneExpr 
   // quotes.reflect.report.info(expr.show)
   expr

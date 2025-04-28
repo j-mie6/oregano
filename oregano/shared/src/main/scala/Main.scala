@@ -1,14 +1,14 @@
 package oregano.shared
 
 import oregano.regex 
-import oregano.internal.makeMatch
 
 object Main {
   def main(args: Array[String]): Unit = {
     // inline val regEx = "\\u0061\\0142c|def|ghi"
     inline val regEx = "(ab)*abc|def"
-    println("Current inlined regex: " + regEx)
+    // inline val regEx = "ababc"
     val compileTime = regEx.regex
+    println("Current inlined regex: " + regEx)
     println(s"matches \"ababc\": ${compileTime.matches("ababc")}")
     println(s"matches \"def\": ${compileTime.matches("def")}")
     println(s"matches \"ghi\": ${compileTime.matches("ghi")}")

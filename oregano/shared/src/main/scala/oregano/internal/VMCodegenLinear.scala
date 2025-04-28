@@ -3,7 +3,6 @@ package oregano.internal
 import scala.quoted.*
 import scala.collection.mutable
 import scala.reflect.ClassTag
-import oregano.internal.VMCodegenLinear.epsilonClosure
 
 // def arrayExpr[T: Type](elems: Array[Expr[T]])(using Quotes): Expr[Array[T]] =
 //   import quotes.reflect.*
@@ -25,6 +24,28 @@ import oregano.internal.VMCodegenLinear.epsilonClosure
 //   res
 
 object VMCodegenLinear:
+  def epsilonClosure(prog: Prog, startPc: Int): List[Int] =
+    val visited = scala.collection.mutable.Queue.empty[Int]
+    val next = scala.collection.mutable.ListBuffer.empty[Int]
+
+    visited.enqueue(startPc)
+    
+    while visited.nonEmpty do
+      val pc = visited.dequeue()
+      // if ALT/LOOP, queue both branches
+      // else if NOP, queue the out branch
+      // else, add to next
+      prog.getInst(pc).op match
+        case InstOp.NOP =>
+          next += prog.getInst(pc).out
+        case InstOp.ALT | InstOp.LOOP =>
+          val inst = prog.getInst(pc)
+          visited.enqueue(inst.out)
+          visited.enqueue(inst.arg)
+        case _ =>
+          next += pc
+
+    next.toList
 
   def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
 
@@ -102,29 +123,6 @@ object VMCodegenLinear:
         catch case _: scala.util.control.ControlThrowable => true
     }
 
-  def epsilonClosure(prog: Prog, startPc: Int): List[Int] =
-    val visited = scala.collection.mutable.Queue.empty[Int]
-    val next = scala.collection.mutable.ListBuffer.empty[Int]
-
-    visited.enqueue(startPc)
-    
-    while visited.nonEmpty do
-      val pc = visited.dequeue()
-      // if ALT/LOOP, queue both branches
-      // else if NOP, queue the out branch
-      // else, add to next
-      prog.getInst(pc).op match
-        case InstOp.NOP =>
-          next += prog.getInst(pc).out
-        case InstOp.ALT | InstOp.LOOP =>
-          val inst = prog.getInst(pc)
-          visited.enqueue(inst.out)
-          visited.enqueue(inst.arg)
-        case _ =>
-          next += pc
-
-    next.toList
-
   def generateHandler(prog: Prog, pc: Int, inst: Inst)(using Quotes): Expr[(Int, CharSequence, ThreadQueue, ThreadQueue) => Boolean] =
     lazy val out = Expr(inst.out)
     lazy val outInst = Expr(prog.getInst(inst.out))
@@ -146,13 +144,13 @@ object VMCodegenLinear:
     inst.op match
       case InstOp.MATCH =>
         '{
-          (pos, input, runq, nextq) =>
+          (pos, input, _, _) =>
             pos == input.length
         }
 
       case InstOp.RUNE | InstOp.RUNE1 =>
         '{
-          (pos, input, _runq, nextq) =>
+          (pos, input, _, nextq) =>
             if pos < input.length && $runeCheck(input.charAt(pos).toInt) then
               if !nextq.contains($out) then
                 val id = nextq.add($out)
@@ -184,7 +182,7 @@ object VMCodegenLinear:
       
       case InstOp.NOP | InstOp.ALT | InstOp.LOOP =>
         '{
-          (pos, _input, runq, _nextq) =>
+          (pos, _, runq, _) =>
             ${
               val stagedBlocks = staticEnqueues('{ pos }, '{ runq })
               Expr.block(stagedBlocks, '{ false })
@@ -195,21 +193,20 @@ object VMCodegenLinear:
         '{ (_, _, _, _) => false }
 
   def genMatcherRE2(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
-    val handlerExprs: List[Expr[(Int, CharSequence, ThreadQueue, ThreadQueue) => Boolean]] =
-      (0 until prog.numInst).toList.map { pc =>
-        println(s"GENERATING HANDLER $pc for ${prog.getInst(pc)}")
+    val handlerExprs: Seq[Expr[(Int, CharSequence, ThreadQueue, ThreadQueue) => Boolean]] =
+      (0 until prog.numInst).toSeq.map { pc =>
         val inst = prog.getInst(pc)
         generateHandler(prog, pc, inst)
       }
 
-    val tableExpr: Expr[Seq[(Int, CharSequence, ThreadQueue, ThreadQueue) => Boolean]] =
-      Expr.ofSeq(handlerExprs)
+    val tableExpr = Varargs(handlerExprs)
 
     '{
       (input: CharSequence) =>
         var runq = ThreadQueue(${Expr(prog.numInst)})
         var nextq = ThreadQueue(${Expr(prog.numInst)})
-        val table = $tableExpr.toArray
+        // this can and should be extracted out and done once per expression
+        val table = Array($tableExpr*)
         val startPc = ${Expr(prog.start)}
         val startId = runq.add(startPc)
         runq.setThread(startId, Thread(${Expr(prog.getInst(prog.start))}, 0))
@@ -239,5 +236,5 @@ object VMCodegenLinear:
   val basicPattern = Pattern.compile("a|b|c")
   val basicProg = ProgramCompiler.compileRegexp(basicPattern)
   println(basicProg)
-  println(epsilonClosure(basicProg, basicProg.start))
+  println(VMCodegenLinear.epsilonClosure(basicProg, basicProg.start))
 }
