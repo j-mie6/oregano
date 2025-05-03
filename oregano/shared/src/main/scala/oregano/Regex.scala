@@ -9,6 +9,9 @@ import scala.quoted.*
 
 abstract class Regex[Match] {
   def matches(input: CharSequence): Boolean
+  def matchesRuntime(input: CharSequence): Boolean
+  def matchesLinear(input: CharSequence): Boolean
+  def matchesBacktrack(input: CharSequence): Boolean
   def unapplySeq(input: CharSequence): Option[Match]
 }
 
@@ -22,6 +25,9 @@ object Regex {
     //   internal.Pattern.compile(s).matches(input)
         compiled.matches(input)
     }
+    def matchesRuntime(input: CharSequence): Boolean = ???
+    def matchesLinear(input: CharSequence): Boolean = ???
+    def matchesBacktrack(input: CharSequence): Boolean = ???
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }
 }

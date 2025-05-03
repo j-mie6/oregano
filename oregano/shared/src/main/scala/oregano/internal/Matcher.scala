@@ -4,12 +4,13 @@ package oregano.internal
 // note that re2j stores an inst, one less layer of indirection
 // case class Thread(pc: Int, pos: Int) 
 
-final case class Thread(inst: Inst, pos: Int) 
+final class Thread(var inst: Inst, var pos: Int) 
 
 final class ThreadQueue(n: Int):
   val sparse = new Array[Int](n)
   val densePcs = new Array[Int](n)
-  val denseThreads = new Array[Option[Thread]](n)
+  val denseInsts = new Array[Inst](n)
+  val densePos = Array.fill(n)(-1)
   var size = 0
 
   def isEmpty: Boolean = size == 0
@@ -22,18 +23,52 @@ final class ThreadQueue(n: Int):
     val j = size
     sparse(pc) = j
     densePcs(j) = pc
-    denseThreads(j) = None
     size += 1
     j
 
   def clear(): Unit =
     size = 0
 
-  def getThread(i: Int): Option[Thread] = denseThreads(i)
-  def setThread(i: Int, t: Thread): Unit = denseThreads(i) = Some(t)
+  def getInst(i: Int): Inst = denseInsts(i)
+  def getPos(i: Int): Int = densePos(i)
+
+  def setThread(i: Int, inst: Inst, pos: Int): Unit =
+    denseInsts(i) = inst
+    densePos(i) = pos
 
   override def toString: String =
     densePcs.take(size).mkString("{", ", ", "}")
+
+// final case class Thread(inst: Inst, pos: Int) 
+
+// final class ThreadQueue(n: Int):
+//   val sparse = new Array[Int](n)
+//   val densePcs = new Array[Int](n)
+//   val denseThreads = new Array[Option[Thread]](n)
+//   var size = 0
+
+//   def isEmpty: Boolean = size == 0
+
+//   def contains(pc: Int): Boolean =
+//     val j = sparse(pc)
+//     j < size && densePcs(j) == pc
+
+//   def add(pc: Int): Int =
+//     val j = size
+//     sparse(pc) = j
+//     densePcs(j) = pc
+//     denseThreads(j) = None
+//     size += 1
+//     j
+
+//   def clear(): Unit =
+//     size = 0
+
+//   def getThread(i: Int): Option[Thread] = denseThreads(i)
+//   def setThread(i: Int, t: Thread): Unit = denseThreads(i) = Some(t)
+
+//   override def toString: String =
+//     densePcs.take(size).mkString("{", ", ", "}")
 
 class Matcher(prog: Prog, input: CharSequence) {
   val inputLength = input.length()
@@ -50,24 +85,23 @@ class Matcher(prog: Prog, input: CharSequence) {
           add(q, inst.arg, pos)
         case _ =>
           val id = q.add(pc)
-          q.setThread(id, Thread(inst, pos)) // optional: if storing Thread object
+          q.setThread(id, inst, pos) // optional: if storing Thread object
 
   def step(runq: ThreadQueue, nextq: ThreadQueue): Boolean =
     var i = 0
     while i < runq.size do
-      runq.getThread(i) match
-        case Some(Thread(inst, pos)) =>
-          inst.op match
-            case InstOp.MATCH =>
-              if pos == inputLength then return true
+      val inst = runq.getInst(i)
+      val pos = runq.getPos(i)
+      inst.op match
+        case InstOp.MATCH =>
+          if pos == inputLength then return true
 
-            case InstOp.RUNE | InstOp.RUNE1 =>
-              if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
-                add(nextq, inst.out, pos + 1)
+        case InstOp.RUNE | InstOp.RUNE1 =>
+          if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
+            add(nextq, inst.out, pos + 1)
 
-            case _ =>
-              throw new RuntimeException(s"Unexpected opcode in step: ${inst.op}")
-        case None => ()
+        case _ =>
+          throw new RuntimeException(s"Unexpected opcode in step: ${inst.op}")
       i += 1
     false
 }

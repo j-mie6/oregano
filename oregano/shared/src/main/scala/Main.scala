@@ -9,10 +9,10 @@ object Main {
     // inline val regEx = "ababc"
     val compileTime = regEx.regex
     println("Current inlined regex: " + regEx)
-    println(s"matches \"ababc\": ${compileTime.matches("ababc")}")
-    println(s"matches \"def\": ${compileTime.matches("def")}")
-    println(s"matches \"ghi\": ${compileTime.matches("ghi")}")
-    println(s"matches \"jkl\": ${compileTime.matches("jkl")}")
+    println(s"matches \"ababc\": ${compileTime.matchesLinear("ababc")}")
+    println(s"matches \"def\": ${compileTime.matchesLinear("def")}")
+    println(s"matches \"ghi\": ${compileTime.matchesLinear("ghi")}")
+    println(s"matches \"jkl\": ${compileTime.matchesLinear("jkl")}")
     val uninlined = "abc|def"
     println("Current uninlined regex: " + uninlined)
     val runtime = uninlined.regex

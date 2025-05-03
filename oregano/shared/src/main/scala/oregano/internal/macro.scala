@@ -16,18 +16,23 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
         val p = Pattern.compile(ast)
         report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
         val prog = ProgramCompiler.compileRegexp(p)
-        // report.info(s"Prog:\n $prog")
-        // val liftedProgExpr = Expr(prog)
-        // val matcherExpr = VMCodegen.genMatcher(prog)
-        // val matcherExpr = VMCodegenLinear.genMatcher(prog)
-        val matcherExpr = VMCodegenLinear.genMatcherRE2(prog)
-        quotes.reflect.report.info(matcherExpr.show)
+        report.info(s"Prog:\n $prog")
+        val liftedProgExpr = Expr(prog)
+        val backtrackMatcherExpr = VMCodegen.genMatcher(prog)
+        // val linearMatcherExpr = VMCodegenLinear.genMatcherRE2(prog)
+        val flatTableExpr = FlatTable.build(prog)
+        val linearMatcherExpr = VMCodegenFlat.genMatcherFlat(prog)
+        // quotes.reflect.report.info(matcherExpr.show)
         '{
             // just do compile-time checks for now!
             new oregano.Regex[List[String]] {
                 val regex = ${Expr(s)}.r
-                // def matches(input: CharSequence): Boolean = regex.matches(input)
-                def matches(input: CharSequence): Boolean = $matcherExpr(input)
+                val prog = $liftedProgExpr
+                val flatTable = $flatTableExpr
+                def matches(input: CharSequence): Boolean = regex.matches(input)
+                def matchesRuntime(input: CharSequence): Boolean = Matcher.matches(prog, input)
+                def matchesLinear(input: CharSequence): Boolean = $linearMatcherExpr(input, flatTable)
+                def matchesBacktrack(input: CharSequence): Boolean = $backtrackMatcherExpr(input)
                 def unapplySeq(input: CharSequence): Option[List[String]] = regex.unapplySeq(input)
             }
         }
