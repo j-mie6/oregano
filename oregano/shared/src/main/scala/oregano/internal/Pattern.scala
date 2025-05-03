@@ -58,6 +58,7 @@ object Pattern {
     case Regex.Alt(r1, r2) => Pattern.Alt(compile(r1), compile(r2))
     case Regex.Class(diet) => Pattern.Class(diet)
     case Regex.Rep0(r) => Pattern.Rep0(compile(r))
+    case Regex.Capture(r) => compile(r) // do nothing for now
     case _ => ???
   }
 

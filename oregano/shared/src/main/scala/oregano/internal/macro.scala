@@ -14,9 +14,9 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
     case Right(ast) =>
         // report.info(s"$ast")
         val p = Pattern.compile(ast)
-        // report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
+        report.info(s"Parsley AST: ${ast.toString}\nPattern: $p")
         val prog = ProgramCompiler.compileRegexp(p)
-        report.info(s"Prog:\n $prog")
+        // report.info(s"Prog:\n $prog")
         // val liftedProgExpr = Expr(prog)
         // val matcherExpr = VMCodegen.genMatcher(prog)
         // val matcherExpr = VMCodegenLinear.genMatcher(prog)
