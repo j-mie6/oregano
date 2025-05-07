@@ -18,20 +18,20 @@ def dietToRanges(diet: Diet[Int]): List[Int] = {
 }
 
 class ProgramCompiler {
-  private val prog = Prog()
+  private val progBuilder = new ProgBuilder()
 
   // always insert FAIL as first instruction
-  prog.addInst(InstOp.FAIL)
+  progBuilder.addInst(InstOp.FAIL)
 
   def compileRegexp(re: Pattern): Prog = {
     val f = compile(re)
-    prog.patch(f.out, newInst(InstOp.MATCH).i)
-    prog.start = f.i
-    prog
+    progBuilder.patch(f.out, newInst(InstOp.MATCH).i)
+    progBuilder.setStart(f.i)
+    progBuilder.toProg
   }
 
   private def newInst(op: InstOp): Frag = {
-    val pc = prog.addInst(op)
+    val pc = progBuilder.addInst(op)
     Frag(pc, 0, nullable = true)
   }
 
@@ -52,7 +52,7 @@ class ProgramCompiler {
 
   private def cat(f1: Frag, f2: Frag): Frag = {
     if f1.i == 0 || f2.i == 0 then return fail()
-    prog.patch(f1.out, f2.i)
+    progBuilder.patch(f1.out, f2.i)
     Frag(f1.i, f2.out, f1.nullable && f2.nullable)
   }
 
@@ -60,35 +60,35 @@ class ProgramCompiler {
     if f1.i == 0 then return f2
     if f2.i == 0 then return f1
     val f = newInst(InstOp.ALT)
-    val i = prog.getInst(f.i)
+    val i = progBuilder.getInst(f.i)
     i.out = f1.i
     i.arg = f2.i
-    val merged = prog.append(f1.out, f2.out)
+    val merged = progBuilder.append(f1.out, f2.out)
     Frag(f.i, merged, f1.nullable || f2.nullable)
   }
 
   private def loop(f1: Frag, nongreedy: Boolean): Frag = {
     val f = newInst(InstOp.LOOP)
-    val i = prog.getInst(f.i)
+    val i = progBuilder.getInst(f.i)
     if nongreedy then
       i.arg = f1.i
-      prog.patch(f1.out, f.i)
+      progBuilder.patch(f1.out, f.i)
       Frag(f.i, f.i << 1, nullable = true)
     else
       i.out = f1.i
-      prog.patch(f1.out, f.i)
+      progBuilder.patch(f1.out, f.i)
       Frag(f.i, (f.i << 1) | 1, nullable = true)
   }
 
   private def quest(f1: Frag, nongreedy: Boolean): Frag = {
     val f = newInst(InstOp.ALT)
-    val i = prog.getInst(f.i)
+    val i = progBuilder.getInst(f.i)
     val patchedOut = if nongreedy then
       i.arg = f1.i
-      prog.append(f.i << 1, f1.out)
+      progBuilder.append(f.i << 1, f1.out)
     else
       i.out = f1.i
-      prog.append((f.i << 1) | 1, f1.out)
+      progBuilder.append((f.i << 1) | 1, f1.out)
     Frag(f.i, patchedOut, nullable = true)
   }
 
@@ -110,7 +110,7 @@ class ProgramCompiler {
 
   private def rune(runes: Array[Int], flags0: Int): Frag = {
     val f = newInst(InstOp.RUNE)
-    val inst = prog.getInst(f.i)
+    val inst = progBuilder.getInst(f.i)
     // var flags = flags0 & RE2.FOLD_CASE
     val flags = flags0 
     // if (runes.length != 1 || Unicode.simpleFold(runes(0)) == runes(0))
