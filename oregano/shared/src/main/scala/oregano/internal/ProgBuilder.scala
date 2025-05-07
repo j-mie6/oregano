@@ -3,17 +3,17 @@ package oregano.internal
 import scala.collection.mutable.ArrayBuffer
 
 final class ProgBuilder {
-  private val insts = ArrayBuffer.empty[Inst]
+  private val insts = ArrayBuffer.empty[MutableInst]
   private var _start: Int = 0
   private var _numCap: Int = 2
 
   def addInst(op: InstOp): Int = {
-    val i = Inst(op)
+    val i = MutableInst(op)
     insts += i
     insts.length - 1
   }
 
-  def getInst(pc: Int): Inst =
+  def getInst(pc: Int): MutableInst =
     insts(pc)
 
   def setStart(pc: Int): Unit =
@@ -60,6 +60,6 @@ final class ProgBuilder {
   }
 
   def toProg: Prog =
-    Prog(IArray.unsafeFromArray(insts.toArray), _start, _numCap)
+    Prog(IArray.from(insts.map(_.toImmutable)), _start, _numCap)
 }
 

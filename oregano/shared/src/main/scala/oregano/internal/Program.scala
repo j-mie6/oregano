@@ -8,8 +8,7 @@ given ToExpr[Prog] with
       Expr.ofSeq(prog.insts.toSeq.map(Expr(_)))
 
     '{
-      val instsArray: IArray[Inst] = IArray.from($instExprs)
-      Prog(instsArray, ${ Expr(prog.start) }, ${ Expr(prog.numCap) })
+      Prog(IArray.from($instExprs), ${ Expr(prog.start) }, ${ Expr(prog.numCap) })
     }
   }
 

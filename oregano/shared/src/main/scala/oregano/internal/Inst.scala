@@ -11,7 +11,7 @@ Main argument against (which I think is strong) is that mutability is nice for o
 
 // TODO: move elsewhere?
 // Escape everything but bread and butter ASCII, kind of a jackhammer 
-// approach but who cares about stringification performance
+// approach but who cares about stringification performance for printing
 private[internal] def escapeRune(sb: StringBuilder, r: Int): Unit = {
     if (r >= 32 && r <= 126 && r != '"') sb.append(r.toChar)
     else sb.append(f"\\u${r}%04x")
@@ -43,23 +43,17 @@ object InstOp:
 
 given ToExpr[Inst] with
   def apply(inst: Inst)(using Quotes): Expr[Inst] =
-    val runesExpr = Expr.ofList(inst.runes.toList.map(Expr(_)))
+    val runesExpr = Expr.ofSeq(inst.runes.toList.map(Expr(_)))
     '{
       new Inst(
         op    = ${ Expr(inst.op) },
         out   = ${ Expr(inst.out) },
         arg   = ${ Expr(inst.arg) },
-        runes = $runesExpr.toArray
+        runes = IArray( $runesExpr* )
       )
     }
 
-case class Inst(
-  var op: InstOp,
-  var out: Int = 0,
-  var arg: Int = 0,
-  var runes: Array[Int] = Array.empty
-) {
-
+final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
   def matchRune(r: Int): Boolean =
     if runes.length == 1 then
       val r0 = runes(0)
@@ -118,9 +112,9 @@ case class Inst(
       '{ (r: Int) => r == ${Expr(lit)} }
 
     else
-      val pairs = runes.grouped(2).collect {
-        case Array(lo, hi) => (lo, hi)
-        case Array(single) => (single, single)
+      val pairs: List[(Int, Int)] = runes.grouped(2).collect {
+        case IArray(lo, hi) => (lo, hi)
+        case IArray(single) => (single, single)
       }.toList
 
       if pairs.length <= 4 then
@@ -140,7 +134,7 @@ case class Inst(
         val pairsArgsExpr = Varargs(pairs.map { case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) })
         '{
           // could potentially keep Inst around at runtime
-          val pairs = Array($pairsArgsExpr*)
+          val pairs = IArray($pairsArgsExpr*)
           (r: Int) =>
             var ret = false
             var lo = 0
@@ -155,58 +149,12 @@ case class Inst(
             ret
         }
 
-//   /** Returns true if this instruction matches (and consumes) the given rune. */
-//   def matchRuneExpr(inst: Inst)(using Quotes): Expr[Int => Boolean] =
-//     val runes = inst.runes
-
-//     if runes.length == 1 then
-//       val r0 = runes(0)
-//       // Literal equality check
-//       '{ (r: Int) => r == ${Expr(r0)} }
-
-//     else
-//       // Generate code for fast linear scan first, then fallback to binary search
-//       val earlyCheckExprs = runes.grouped(2).take(4).map {
-//         case Array(lo, hi) =>
-//           '{ (r: Int) => r >= ${Expr(lo)} && r <= ${Expr(hi)} }
-//         case _ => '{ (_: Int) => false }
-//       }.toList
-
-//       // Binary search expression
-//       val pairs = runes.grouped(2).toArray
-//       val binarySearchExpr =
-//         '{
-//           (r: Int) =>
-//             var ret = false
-//             var lo = 0
-//             var hi = ${Expr(pairs.length)}
-//             while lo < hi do
-//               val m = lo + (hi - lo) / 2
-//               val rlo = ${Expr(pairs)}(m)(0)
-//               val rhi = ${Expr(pairs)}(m)(1)
-//               if r < rlo then hi = m
-//               else if (r > rhi) then lo = m + 1
-//               else 
-//                 ret = true
-//                 break
-//             ret
-//         }
-
-//       // Combine early exit with fallback binary search
-//       val combined =
-//         earlyCheckExprs.reduceLeftOption { (acc, next) =>
-//           '{ (r: Int) => ${acc}(r) || ${next}(r) }
-//         }.getOrElse('{ (_: Int) => false })
-
-//       // Wrap in full check
-//       '{
-//         (r: Int) =>
-//           if ${combined}(r) then true
-//           else ${binarySearchExpr}(r)
-//       }
-
-  private def escapeRunes(runes: Array[Int]): String =
+  private def escapeRunes(runes: IArray[Int]): String =
     val sb = new StringBuilder("\"")
     runes.foreach(escapeRune(sb, _))
     sb.append('"').toString()
+}
+
+case class MutableInst(var op: InstOp, var out: Int = 0, var arg: Int = 0, var runes: Array[Int] = Array.empty) {
+  def toImmutable: Inst = Inst(op, out, arg, IArray.from(runes))
 }
