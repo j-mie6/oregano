@@ -1,6 +1,7 @@
 package oregano.internal
 
 import scala.quoted.*
+import scala.annotation.switch
 
 final class FlatTable(
   val n: Int,
@@ -13,10 +14,10 @@ final class FlatTable(
 
 object FlatTable:
   def build(prog: Prog)(using Quotes): Expr[FlatTable] =
-    val nExpr     = Expr(prog.numInst)
+    val nExpr = Expr(prog.numInst)
     val startExpr = Expr(prog.start)
 
-    val opExprs  = (0 until prog.numInst).map(i => Expr(prog.getInst(i).op.ordinal))
+    val opExprs = (0 until prog.numInst).map(i => Expr(prog.getInst(i).op.ordinal))
     val outExprs = (0 until prog.numInst).map(i => Expr(prog.getInst(i).out))
     val argExprs = (0 until prog.numInst).map(i => Expr(prog.getInst(i).arg))
 
@@ -62,7 +63,48 @@ final class FlatQueue(n: Int):
     size = 0
 
 object VMCodegenFlat:
+  // def genMatcherFlat(prog: Prog)(using Quotes): Expr[(CharSequence, FlatTable) => Boolean] =
+  //   '{
+  //     (input: CharSequence, table: FlatTable) =>
+  //       val length = input.length
+  //       var runq  = FlatQueue(table.n)
+  //       var nextq = FlatQueue(table.n)
+  //       var matched = false
 
+  //       runq.add(table.start, 0)
+
+  //       while !matched && !runq.isEmpty do
+  //         var i = 0
+  //         while i < runq.size do
+  //           val pc  = runq.densePcs(i)
+  //           val pos = runq.densePos(i)
+  //           i += 1
+
+  //           // ugly! could look at replacing with @switch or something + inline functions for perf
+  //           // maybe look at having InstOps without .ordinal (e.g. with variables)
+  //           table.op(pc) match
+  //             case x if x == InstOp.MATCH.ordinal =>
+  //               if pos == length then matched = true
+
+  //             case x if x == InstOp.RUNE.ordinal || x == InstOp.RUNE1.ordinal =>
+  //               if pos < length && table.runes(pc)(input.charAt(pos).toInt) then
+  //                 nextq.add(table.out(pc), pos + 1)
+
+  //             case x if x == InstOp.NOP.ordinal =>
+  //               runq.add(table.out(pc), pos)
+
+  //             case x if x == InstOp.ALT.ordinal || x == InstOp.LOOP.ordinal =>
+  //               runq.add(table.out(pc), pos)
+  //               runq.add(table.arg(pc), pos)
+
+  //             case _ =>
+
+  //         runq.clear()
+  //         val tmp = runq; runq = nextq; nextq = tmp
+
+  //       matched
+  //   }
+  
   def genMatcherFlat(prog: Prog)(using Quotes): Expr[(CharSequence, FlatTable) => Boolean] =
     '{
       (input: CharSequence, table: FlatTable) =>
@@ -80,24 +122,22 @@ object VMCodegenFlat:
             val pos = runq.densePos(i)
             i += 1
 
-            // ugly! could look at replacing with @switch or something + inline functions for perf
-            // maybe look at having InstOps without .ordinal (e.g. with variables)
-            table.op(pc) match
-              case x if x == InstOp.MATCH.ordinal =>
+            (table.op(pc): @switch) match
+              case 5 => // MATCH
                 if pos == length then matched = true
 
-              case x if x == InstOp.RUNE.ordinal || x == InstOp.RUNE1.ordinal =>
+              case 7 | 8 => // RUNE, RUNE1
                 if pos < length && table.runes(pc)(input.charAt(pos).toInt) then
                   nextq.add(table.out(pc), pos + 1)
 
-              case x if x == InstOp.NOP.ordinal =>
+              case 6 => // NOP
                 runq.add(table.out(pc), pos)
 
-              case x if x == InstOp.ALT.ordinal || x == InstOp.LOOP.ordinal =>
+              case 0 | 11 => // ALT, LOOP
                 runq.add(table.out(pc), pos)
                 runq.add(table.arg(pc), pos)
 
-              case _ =>
+              case _ => ()
 
           runq.clear()
           val tmp = runq; runq = nextq; nextq = tmp
