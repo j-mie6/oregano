@@ -1,14 +1,7 @@
 package oregano.internal
 
 import scala.quoted.*
-// import oregano.internal.Pattern.matchPattern
 import cats.collections.{Diet, Range}
-
-// Need to convert at runtime
-// TODO: See how existing Matcher class deals with this, doesn't seem egregious
-// given ToExpr[CharSequence] with
-//   def apply(input: CharSequence)(using Quotes): Expr[CharSequence] =
-//     Expr(input.toString)
 
 given ToExpr[Range[Int]] with
   def apply(rng: Range[Int])(using Quotes): Expr[Range[Int]] =
@@ -32,9 +25,6 @@ sealed trait Pattern {
       Pattern.Alt(p1.optimize, p2.optimize)
     case _ => this
   }
-
-//   def matches(input: CharSequence): Boolean = matchPattern(this, input, 0) == input.length
-//   def matches(input: Expr[CharSequence])(using Quotes): Expr[Boolean] = '{ ${ matchPattern(this, input, Expr(0)) } == $input.length }
 }
 
 object Pattern {
@@ -43,6 +33,7 @@ object Pattern {
   final case class Alt(left: Pattern, right: Pattern) extends Pattern 
   final case class Class(diet: Diet[Int]) extends Pattern
   final case class Rep0(pat: Pattern) extends Pattern
+  final case class Capture(groupIdx: Int, pat: Pattern) extends Pattern
 
   def lit(c: Int): Pattern = Lit(c)
   def concat(ps: Pattern*): Pattern = Cat(ps.toList).optimize
@@ -52,75 +43,41 @@ object Pattern {
 
   // Do we need this? could we not use Regex.Lit, Regex.Cat, Regex.Alt etc directly?
   // Might be worth having when optimising, for methods etc. but not sure
-  def compile(regex: Regex): Pattern = regex match {
-    case Regex.Lit(c) => Pattern.Lit(c)
-    case Regex.Cat(rs) => Pattern.Cat(rs.map(compile))
-    case Regex.Alt(r1, r2) => Pattern.Alt(compile(r1), compile(r2))
-    case Regex.Class(diet) => Pattern.Class(diet)
-    case Regex.Rep0(r) => Pattern.Rep0(compile(r))
-    case Regex.Capture(r) => compile(r) // do nothing for now
-    case _ => ???
-  }
+  def compile(regex: Regex, nextGroup: Int = 1): (Pattern, Int) = regex match {
+      case Regex.Lit(c) => 
+        (Pattern.Lit(c), nextGroup)
 
-//   def matchPattern(p: Pattern, input: CharSequence, pos: Int): Int = p match {
-//     case Lit(c) =>
-//       if (pos < input.length() && input.charAt(pos) == c.toChar) pos + 1 else -1
+      case Regex.Cat(rs) =>
+        rs.foldLeft((List.empty[Pattern], nextGroup)) {
+          case ((acc, g), r) =>
+            val (p, g2) = compile(r, g)
+            (acc :+ p, g2)
+        } match {
+          case (ps, g) => (Pattern.Cat(ps), g)
+        }
 
-//     case Cat(patterns) =>
-//       patterns.foldLeft(pos) { (accPos, pat) =>
-//         if (accPos < 0) -1 else matchPattern(pat, input, accPos)
-//       }
+      case Regex.Alt(r1, r2) =>
+        val (p1, g1) = compile(r1, nextGroup)
+        val (p2, g2) = compile(r2, g1)
+        (Pattern.Alt(p1, p2), g2)
 
-//     case Alt(left, right) =>
-//       val leftPos = matchPattern(left, input, pos)
-//       if (leftPos >= 0) leftPos else matchPattern(right, input, pos)
-  
-//     case Class(diet) =>
-//       if (pos < input.length() && diet.contains(input.charAt(pos).toInt)) pos + 1
-//       else -1
-//   }
+      case Regex.Class(d) =>
+        (Pattern.Class(d), nextGroup)
 
-//   def matchPattern(
-//       p: Pattern,
-//       inputExpr: Expr[CharSequence],
-//       posExpr: Expr[Int]
-//   )(using Quotes): Expr[Int] =
-//     // println("inlining matchPattern") // debug
-//     p match {
-//       case Pattern.Lit(c) =>
-//         '{
-//           if ($posExpr < $inputExpr.length && $inputExpr.charAt($posExpr) == ${Expr(c.toChar)}) $posExpr + 1
-//           else -1
-//         }
+      case Regex.Rep0(r) =>
+        val (p, g) = compile(r, nextGroup)
+        (Pattern.Rep0(p), g)
 
-//       case Pattern.Cat(patterns) =>
-//         patterns.foldLeft(posExpr) { (accPosExpr, sub) =>
-//           '{
-//             if ($accPosExpr < 0) -1 // short-circuit
-//             else {
-//               val nextPos = ${ matchPattern(sub, inputExpr, accPosExpr) }
-//               nextPos
-//             }
-//           }
-//         }
+      case Regex.Capture(r) => compile(r, nextGroup)
+      // case Regex.Capture(r) =>
+      //   val groupId = nextGroup
+      //   val (p, g2) = compile(r, nextGroup + 1)
+      //   (Pattern.Capture(groupId, p), g2)
+    }
 
-//       case Pattern.Alt(left, right) =>
-//         '{
-//           val leftPos = ${ matchPattern(left, inputExpr, posExpr) }
-//           if (leftPos >= 0) leftPos
-//           else ${ matchPattern(right, inputExpr, posExpr) }
-//         }
-
-//       case Class(diet) => 
-//         // no idea why Expr is needed, '{ diet } doesn't work
-//         '{
-//           if ($posExpr < $inputExpr.length && ${ Expr(diet) }.contains($inputExpr.charAt($posExpr).toInt)) $posExpr + 1
-//           else -1
-//         }
-//     }
-
-  // not sure if needed, more for testing
-  def compile(regex: String): Pattern = compile(parse(regex).getOrElse(throw IllegalArgumentException(s"Invalid regex: $regex")))
+  def compile(regex: String): (Pattern, Int) =
+    val re: Regex = parse(regex).getOrElse(throw IllegalArgumentException(s"Invalid regex: $regex"))
+    compile(re)
 }
 
 @main def testPatterns() =

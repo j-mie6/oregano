@@ -156,5 +156,5 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
 }
 
 case class MutableInst(var op: InstOp, var out: Int = 0, var arg: Int = 0, var runes: Array[Int] = Array.empty) {
-  def toImmutable: Inst = Inst(op, out, arg, IArray.from(runes))
+  def toInst: Inst = Inst(op, out, arg, IArray.from(runes))
 }

@@ -4,7 +4,8 @@ import scala.quoted.*
 import scala.collection.mutable
 import scala.reflect.ClassTag
 
-object VMCodegenBFS:
+// more for profiling, pretty useless
+object BFSMatcher:
 
   def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
 

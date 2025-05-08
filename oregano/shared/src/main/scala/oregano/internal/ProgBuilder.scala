@@ -3,18 +3,18 @@ package oregano.internal
 import scala.collection.mutable.ArrayBuffer
 
 final class ProgBuilder {
-  private val insts = ArrayBuffer.empty[MutableInst]
+  private val _insts = ArrayBuffer.empty[MutableInst]
   private var _start: Int = 0
   private var _numCap: Int = 2
 
   def addInst(op: InstOp): Int = {
     val i = MutableInst(op)
-    insts += i
-    insts.length - 1
+    _insts += i
+    _insts.length - 1
   }
 
   def getInst(pc: Int): MutableInst =
-    insts(pc)
+    _insts(pc)
 
   def setStart(pc: Int): Unit =
     _start = pc
@@ -25,7 +25,7 @@ final class ProgBuilder {
   def patch(l: Int, value: Int): Unit = {
     var cursor = l
     while cursor != 0 do
-      val i = insts(cursor >> 1)
+      val i = _insts(cursor >> 1)
       val next = if (cursor & 1) == 0 then
         val tmp = i.out
         i.out = value
@@ -47,7 +47,7 @@ final class ProgBuilder {
       last = nextVal
       nextVal = next(last)
 
-    val i = insts(last >> 1)
+    val i = _insts(last >> 1)
     if (last & 1) == 0 then i.out = l2
     else i.arg = l2
 
@@ -55,11 +55,10 @@ final class ProgBuilder {
   }
 
   def next(l: Int): Int = {
-    val i = insts(l >> 1)
+    val i = _insts(l >> 1)
     if (l & 1) == 0 then i.out else i.arg
   }
 
   def toProg: Prog =
-    Prog(IArray.from(insts.map(_.toImmutable)), _start, _numCap)
+    Prog(IArray.from(_insts.map(_.toInst)), _start, _numCap)
 }
-

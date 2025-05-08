@@ -3,6 +3,8 @@ package oregano.internal
 import scala.quoted.*
 import scala.annotation.switch
 
+// a lot of this is stupid, I wanted to try having a function 
+// that didn't need to initialise DS before calling, I think that is the way forward
 final class FlatTable(
   val n: Int,
   val start: Int,
@@ -62,49 +64,7 @@ final class FlatQueue(n: Int):
   def clear(): Unit =
     size = 0
 
-object VMCodegenFlat:
-  // def genMatcherFlat(prog: Prog)(using Quotes): Expr[(CharSequence, FlatTable) => Boolean] =
-  //   '{
-  //     (input: CharSequence, table: FlatTable) =>
-  //       val length = input.length
-  //       var runq  = FlatQueue(table.n)
-  //       var nextq = FlatQueue(table.n)
-  //       var matched = false
-
-  //       runq.add(table.start, 0)
-
-  //       while !matched && !runq.isEmpty do
-  //         var i = 0
-  //         while i < runq.size do
-  //           val pc  = runq.densePcs(i)
-  //           val pos = runq.densePos(i)
-  //           i += 1
-
-  //           // ugly! could look at replacing with @switch or something + inline functions for perf
-  //           // maybe look at having InstOps without .ordinal (e.g. with variables)
-  //           table.op(pc) match
-  //             case x if x == InstOp.MATCH.ordinal =>
-  //               if pos == length then matched = true
-
-  //             case x if x == InstOp.RUNE.ordinal || x == InstOp.RUNE1.ordinal =>
-  //               if pos < length && table.runes(pc)(input.charAt(pos).toInt) then
-  //                 nextq.add(table.out(pc), pos + 1)
-
-  //             case x if x == InstOp.NOP.ordinal =>
-  //               runq.add(table.out(pc), pos)
-
-  //             case x if x == InstOp.ALT.ordinal || x == InstOp.LOOP.ordinal =>
-  //               runq.add(table.out(pc), pos)
-  //               runq.add(table.arg(pc), pos)
-
-  //             case _ =>
-
-  //         runq.clear()
-  //         val tmp = runq; runq = nextq; nextq = tmp
-
-  //       matched
-  //   }
-  
+object FlatMatcher:
   def genMatcherFlat(prog: Prog)(using Quotes): Expr[(CharSequence, FlatTable) => Boolean] =
     '{
       (input: CharSequence, table: FlatTable) =>
@@ -121,10 +81,11 @@ object VMCodegenFlat:
             val pc  = runq.densePcs(i)
             val pos = runq.densePos(i)
             i += 1
-
+            // ugly to use switch for performance
             (table.op(pc): @switch) match
               case 5 => // MATCH
-                if pos == length then matched = true
+                if pos == length then 
+                  matched = true
 
               case 7 | 8 => // RUNE, RUNE1
                 if pos < length && table.runes(pc)(input.charAt(pos).toInt) then
@@ -144,3 +105,69 @@ object VMCodegenFlat:
 
         matched
     }
+
+  def matches(input: CharSequence, table: FlatTable): Boolean = {
+    val length = input.length
+    var runq  = FlatQueue(table.n)
+    var nextq = FlatQueue(table.n)
+    var matched = false
+
+    runq.add(table.start, 0)
+
+    while (!matched && !runq.isEmpty) {
+      var i = 0
+      while (i < runq.size) {
+        val pc  = runq.densePcs(i)
+        val pos = runq.densePos(i)
+        i += 1
+
+        // table.op(pc) match {
+        //   case x if x == InstOp.MATCH.ordinal =>
+        //     if (pos == length) matched = true
+
+        //   case x if x == InstOp.RUNE.ordinal || x == InstOp.RUNE1.ordinal =>
+        //     if (pos < length && table.runes(pc)(input.charAt(pos).toInt))
+        //       nextq.add(table.out(pc), pos + 1)
+
+        //   case x if x == InstOp.NOP.ordinal =>
+        //     runq.add(table.out(pc), pos)
+
+        //   case x if x == InstOp.ALT.ordinal || x == InstOp.LOOP.ordinal =>
+        //     runq.add(table.out(pc), pos)
+        //     runq.add(table.arg(pc), pos)
+
+        //   case x if x == InstOp.FAIL.ordinal =>
+        //     () // do nothing
+          
+        //   case _ =>
+        //     throw new RuntimeException(s"Unexpected opcode: ${table.op(pc)}")
+        // }
+        /* 
+        as it stands, it seems likely that Prog will stay live, 
+        may be worth examining the implications of matching on Prog, 
+        this is naturally ugly (but performant)!
+         */
+        (table.op(pc): @switch) match
+          case 5 => // MATCH
+            if pos == length then matched = true
+
+          case 7 | 8 => // RUNE, RUNE1
+            if pos < length && table.runes(pc)(input.charAt(pos).toInt) then
+              nextq.add(table.out(pc), pos + 1)
+
+          case 6 => // NOP
+            runq.add(table.out(pc), pos)
+
+          case 0 | 11 => // ALT, LOOP
+            runq.add(table.out(pc), pos)
+            runq.add(table.arg(pc), pos)
+
+          case _ => ()
+      }
+
+      runq.clear()
+      val tmp = runq; runq = nextq; nextq = tmp
+    }
+
+    matched
+  }

@@ -23,7 +23,8 @@ class ProgramCompiler {
   // always insert FAIL as first instruction
   progBuilder.addInst(InstOp.FAIL)
 
-  def compileRegexp(re: Pattern): Prog = {
+  def compileRegexp(re: Pattern, numCap: Int): Prog = {
+    progBuilder.setNumCap(numCap)
     val f = compile(re)
     progBuilder.patch(f.out, newInst(InstOp.MATCH).i)
     progBuilder.setStart(f.i)
@@ -42,13 +43,12 @@ class ProgramCompiler {
 
   private def fail(): Frag = Frag(0, 0)
 
-//   private def cap(arg: Int): Frag = {
-//     val f = newInst(InstOp.CAPTURE)
-//     val inst = prog.getInst(f.i)
-//     inst.arg = arg
-//     if prog.numCap < arg + 1 then prog.numCap = arg + 1
-//     Frag(f.i, f.i << 1)
-//   }
+  private def cap(arg: Int): Frag = {
+    val f = newInst(InstOp.CAPTURE)
+    val inst = progBuilder.getInst(f.i)
+    inst.arg = arg
+    Frag(f.i, f.i << 1)
+  }
 
   private def cat(f1: Frag, f2: Frag): Frag = {
     if f1.i == 0 || f2.i == 0 then return fail()
@@ -123,7 +123,9 @@ class ProgramCompiler {
     inst.op =
     //   if ((flags & RE2.FOLD_CASE) == 0 && runes.length == 1)
         // InstOp.RUNE1 else 
-      if (runes.sameElements(Array(0, '\n' - 1, '\n' + 1, MAX_RUNE)))
+      if (runes.length == 1)
+        InstOp.RUNE1
+      else if (runes.sameElements(Array(0, '\n' - 1, '\n' + 1, MAX_RUNE)))
         InstOp.RUNE_ANY_NOT_NL
       else if (runes.sameElements(Array(0, MAX_RUNE)))
         InstOp.RUNE_ANY
@@ -137,17 +139,17 @@ class ProgramCompiler {
 
   private def compile(re: Pattern): Frag = re match {
     case Pattern.Lit(c) =>
-        rune(c, 0)
+      rune(c, 0)
     case Pattern.Class(diet) =>
-        // val runes = diet.toList.sorted
-        val runes = dietToRanges(diet)
-        val pairs: Array[Int] = runes.sliding(2, 2).flatMap {
-            case List(lo, hi) => Seq(lo, hi)
-            case List(single) => Seq(single, single)
-            case List(_, _, _, _*) => Seq.empty
-            case Nil => Seq.empty
-        }.toArray
-        rune(pairs, 0)
+      // val runes = diet.toList.sorted
+      val runes = dietToRanges(diet)
+      val pairs: Array[Int] = runes.sliding(2, 2).flatMap {
+          case List(lo, hi) => Seq(lo, hi)
+          case List(single) => Seq(single, single)
+          case List(_, _, _, _*) => Seq.empty
+          case Nil => Seq.empty
+      }.toArray
+      rune(pairs, 0)
 
     case Pattern.Cat(Nil) =>
         nop()
@@ -164,6 +166,12 @@ class ProgramCompiler {
           quest(f, false)
         else
           star(f, false)
+
+    case Pattern.Capture(idx, pat) =>
+      val bra = cap(idx << 1)
+      val sub = compile(pat)
+      val ket = cap(idx << 1 | 1)
+      cat(cat(bra, sub), ket)
   }
 }
 //     case RegexpOp.NO_MATCH      => fail()
@@ -211,15 +219,15 @@ class ProgramCompiler {
 object ProgramCompiler {
   def apply(): ProgramCompiler = new ProgramCompiler()
 
-  def compileRegexp(re: Pattern): Prog = {
+  def compileRegexp(re: Pattern, numCap: Int): Prog = {
     val compiler = ProgramCompiler()
-    compiler.compileRegexp(re)
+    compiler.compileRegexp(re, numCap)
   }
 }
 
 @main def testProgramCompiler(): Unit = {
-  val regex = "a*b"
-  val pattern = Pattern.compile(regex)
-  val frag = ProgramCompiler.compileRegexp(pattern)
+  val regex = "(a(b))*c|def"
+  val (pattern, numCap) = Pattern.compile(regex)
+  val frag = ProgramCompiler.compileRegexp(pattern, numCap)
   println(frag)
 }
