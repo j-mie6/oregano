@@ -68,11 +68,11 @@ object Pattern {
         val (p, g) = compile(r, nextGroup)
         (Pattern.Rep0(p), g)
 
-      case Regex.Capture(r) => compile(r, nextGroup)
-      // case Regex.Capture(r) =>
-      //   val groupId = nextGroup
-      //   val (p, g2) = compile(r, nextGroup + 1)
-      //   (Pattern.Capture(groupId, p), g2)
+      // case Regex.Capture(r) => compile(r, nextGroup)
+      case Regex.Capture(r) =>
+        val groupId = nextGroup
+        val (p, g2) = compile(r, nextGroup + 1)
+        (Pattern.Capture(groupId, p), g2)
     }
 
   def compile(regex: String): (Pattern, Int) =

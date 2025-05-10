@@ -9,7 +9,8 @@ import scala.quoted.*
 
 abstract class Regex[Match] {
   def matches(input: CharSequence): Boolean
-  def matchesRuntime(input: CharSequence): Boolean
+  // def matchesRuntimeBacktrack(input: CharSequence): Boolean
+  // def matchesRuntimeLinear(input: CharSequence): Boolean
   def matchesLinear(input: CharSequence): Boolean
   def matchesBacktrack(input: CharSequence): Boolean
   def unapplySeq(input: CharSequence): Option[Match]
@@ -19,15 +20,14 @@ object Regex {
   // Fallback method for runtime regexes
   def runtime(s: String): Regex[?] = new Regex[List[String]] {
     private val compiled = s.r
-    // private val pattern = internal.Pattern.compile(internal.parse(s).)
+    private val (pattern, numGroups) = internal.Pattern.compile(s)
+    private val prog = internal.ProgramCompiler.compileRegexp(pattern, numGroups)
     // def matches(input: CharSequence): Boolean = compiled.matches(input)
-    def matches(input: CharSequence): Boolean = {
-    //   internal.Pattern.compile(s).matches(input)
-        compiled.matches(input)
-    }
-    def matchesRuntime(input: CharSequence): Boolean = ???
+    def matches(input: CharSequence): Boolean = internal.CPSMatcher.matches(pattern, numGroups, input)
+    // def matchesRuntimeBacktrack(input: CharSequence): Boolean = ???
+    // def matchesRuntimeLinear(input: CharSequence): Boolean = ???
     def matchesLinear(input: CharSequence): Boolean = ???
-    def matchesBacktrack(input: CharSequence): Boolean = ???
+    def matchesBacktrack(input: CharSequence): Boolean = internal.BacktrackingProgMatcher.matches(prog, input )
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }
 }

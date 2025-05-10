@@ -1,6 +1,7 @@
 package oregano.internal
 
 import cats.collections.Diet
+import oregano.internal.Pattern.Cat
 
 // PLACEHOLDER:
 val MAX_RUNE = 0x10FFFF
@@ -24,7 +25,7 @@ class ProgramCompiler {
   progBuilder.addInst(InstOp.FAIL)
 
   def compileRegexp(re: Pattern, numCap: Int): Prog = {
-    progBuilder.setNumCap(numCap)
+    progBuilder.setNumCap(numCap * 2)
     val f = compile(re)
     progBuilder.patch(f.out, newInst(InstOp.MATCH).i)
     progBuilder.setStart(f.i)
@@ -167,6 +168,7 @@ class ProgramCompiler {
         else
           star(f, false)
 
+    // case Pattern.Capture(idx, pat) => compile(pat)
     case Pattern.Capture(idx, pat) =>
       val bra = cap(idx << 1)
       val sub = compile(pat)

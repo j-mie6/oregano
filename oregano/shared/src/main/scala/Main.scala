@@ -5,14 +5,16 @@ import oregano.regex
 object Main {
   def main(args: Array[String]): Unit = {
     // inline val regEx = "\\u0061\\0142c|def|ghi"
-    inline val regEx = "(ab)*abc|def"
-    // inline val regEx = "ababc"
+    inline val regEx = "(ab)*c|def"
+    // inline val regEx = "ab(a(bc))|(def)"
+    // inline val regEx = "abc|def|ghi|jkl|mnop|qrst|uvwx|yzab|cdef|ghij"
+    // inline val regEx = "abc|def"
     val compileTime = regEx.regex
     println("Current inlined regex: " + regEx)
-    println(s"matches \"ababc\": ${compileTime.matchesLinear("ababc")}")
-    println(s"matches \"def\": ${compileTime.matchesLinear("def")}")
-    println(s"matches \"ghi\": ${compileTime.matchesLinear("ghi")}")
-    println(s"matches \"jkl\": ${compileTime.matchesLinear("jkl")}")
+    println(s"matches \"ababc\": ${compileTime.matchesBacktrack("ababc")}")
+    println(s"matches \"def\": ${compileTime.matchesBacktrack("def")}")
+    println(s"matches \"ghi\": ${compileTime.matchesBacktrack("ghi")}")
+    println(s"matches \"jkl\": ${compileTime.matchesBacktrack("jkl")}")
     val uninlined = "abc|def"
     println("Current uninlined regex: " + uninlined)
     val runtime = uninlined.regex
