@@ -141,7 +141,7 @@ object LinearMatcher:
       // else if NOP, queue the out branch
       // else, add to next
       prog.getInst(pc).op match
-        case InstOp.NOP =>
+        case InstOp.NOP | InstOp.CAPTURE =>
           next += prog.getInst(pc).out
         case InstOp.ALT | InstOp.LOOP =>
           val inst = prog.getInst(pc)

@@ -6,7 +6,7 @@
 package oregano.internal
 
 import scala.quoted.*
-import codes.quine.labo.re2s._
+// import codes.quine.labo.re2s._
 
 private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[?]] = {
     import quotes.reflect.report
@@ -33,7 +33,8 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
             new oregano.Regex[List[String]] {
                 val regex = ${Expr(s)}.r
                 val prog = $liftedProgExpr
-                val re2machine = RE2Machine(prog)
+                val runtimeMachine = RE2Machine(prog)
+                val compileTimeMachine = RE2Machine(prog)
                 val machineTable = $buildMachineTable
                 // re2machine.init(prog.numCap)
                 // val q0 = ThreadQueue(prog.numInst)
@@ -42,14 +43,14 @@ private [oregano] def compileMacro(s: String)(using Quotes): Expr[oregano.Regex[
                 // val prog = $liftedProgExpr
                 // val flatTable = $flatTableExpr
                 // def matches(input: CharSequence): Boolean = regex.matches(input)
-                def matches(input: CharSequence): Boolean = re2machine.matches(input)
+                def matches(input: CharSequence): Boolean = runtimeMachine.matches(input)
                 // def matchesRuntimeLinear(input: CharSequence): Boolean = MatcherFlat.matches(input, flatTable)
                 // // def matchesRuntimeLinear(input: CharSequence): Boolean = MatcherFlatProg.matches(prog, input)
                 // // def matchesRuntimeLinear(input: CharSequence): Boolean = {
                 // //   re2Regex.matches(input)
                 // // }   
                 // def matchesRuntimeBacktrack(input: CharSequence): Boolean = VMCodegenBacktracking.matches(prog, input)
-                def matchesLinear(input: CharSequence): Boolean = $machineMatcherExpr(input, machineTable, re2machine)
+                def matchesLinear(input: CharSequence): Boolean = $machineMatcherExpr(input, machineTable, compileTimeMachine)
                 def matchesBacktrack(input: CharSequence): Boolean = $backtrackProgMatcherExpr(input)
                 def unapplySeq(input: CharSequence): Option[List[String]] = regex.unapplySeq(input)
             }
