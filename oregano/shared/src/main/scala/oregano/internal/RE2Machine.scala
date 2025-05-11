@@ -1,17 +1,15 @@
 package oregano.internal
 
-import scala.quoted.*
-
 /* 
 A Scala port of the RE2J machine, currently to help me reason about things
 */
-class Thread(var inst: Inst, var cap: Array[Int])
+class RE2Thread(var inst: Inst, var cap: Array[Int])
 
-object Thread:
-  def apply(n: Int): Thread = new Thread(null, new Array[Int](n))
+object RE2Thread:
+  def apply(n: Int): RE2Thread = new RE2Thread(null, new Array[Int](n))
 
-class Queue(n: Int):
-  val denseThreads: Array[Thread] = new Array[Thread](n)
+class RE2Queue(n: Int):
+  val denseThreads: Array[RE2Thread] = new Array[RE2Thread](n)
   val densePcs: Array[Int] = new Array[Int](n)
   val sparse: Array[Int] = new Array[Int](n)
   var size: Int = 0
@@ -30,7 +28,7 @@ class Queue(n: Int):
     size += 1
     j
 
-  def getThread(pc: Int): Thread =
+  def getThread(pc: Int): RE2Thread =
     val j = sparse(pc)
     if j < size && densePcs(j) == pc then denseThreads(j)
     else null
@@ -46,9 +44,9 @@ class Queue(n: Int):
     denseThreads(sparse(pc)).cap
 
 class RE2Machine(val prog: Prog):
-  val q0 = new Queue(prog.numInst)
-  val q1 = new Queue(prog.numInst)
-  var pool: Array[Thread] = Array.fill(10)(Thread(prog.numCap))
+  val q0 = new RE2Queue(prog.numInst)
+  val q1 = new RE2Queue(prog.numInst)
+  var pool: Array[RE2Thread] = Array.fill(10)(RE2Thread(prog.numCap))
   var poolSize: Int = pool.length
   var matched: Boolean = false
   var matchcap: Array[Int] = new Array[Int](prog.numCap)
@@ -71,18 +69,18 @@ class RE2Machine(val prog: Prog):
     if ncap == 0 then Array.empty[Int]
     else Array.copyOf(matchcap, ncap)
 
-  def alloc(inst: Inst): Thread =
+  def alloc(inst: Inst): RE2Thread =
     val t =
       if poolSize > 0 then
         poolSize -= 1
         pool(poolSize)
-      else new Thread(inst, new Array[Int](matchcap.length))
+      else new RE2Thread(inst, new Array[Int](matchcap.length))
     t.inst = inst
     t
 
-  def free(q: Queue): Unit = free(q, 0)
+  def free(q: RE2Queue): Unit = free(q, 0)
 
-  def free(q: Queue, from: Int): Unit =
+  def free(q: RE2Queue, from: Int): Unit =
     val needed = poolSize + (q.size - from)
     if pool.length < needed then
       pool = Array.copyOf(pool, math.max(pool.length * 2, needed))
@@ -94,13 +92,13 @@ class RE2Machine(val prog: Prog):
         poolSize += 1
     q.clear()
 
-  def free(t: Thread): Unit =
+  def free(t: RE2Thread): Unit =
     if pool.length <= poolSize then
       pool = Array.copyOf(pool, pool.length * 2)
     pool(poolSize) = t
     poolSize += 1
 
-  def add(pc: Int, pos: Int, cap: Array[Int], q: Queue, t: Thread): Thread =
+  def add(pc: Int, pos: Int, cap: Array[Int], q: RE2Queue, t: RE2Thread): RE2Thread =
     if pc == 0 then return t
     if q.contains(pc) then return t
 
@@ -140,8 +138,8 @@ class RE2Machine(val prog: Prog):
 
 
   def step(
-    runq: Queue,
-    nextq: Queue,
+    runq: RE2Queue,
+    nextq: RE2Queue,
     pos: Int,
     rune: Int,
   ): Boolean =
@@ -194,6 +192,62 @@ class RE2Machine(val prog: Prog):
     runq.clear()
     matchedHere
 
+  def stepWithTable(
+    addTable: Array[AddFn],
+    runq: RE2Queue,
+    nextq: RE2Queue,
+    pos: Int,
+    rune: Int,
+  ): Boolean =
+    var matchedHere = false
+    var j = 0
+
+    while j < runq.size do
+      var t = runq.denseThreads(j)
+      if t != null then
+        val inst = t.inst
+
+        // Longest-match pruning
+        if matched && ncap > 0 && matchcap(0) < t.cap(0) then
+          free(t)
+        else
+          var addNext = false
+          // println(s"step at pos=$pos, char=${rune}, inst=${inst}, cap=${t.cap.mkString(",")}")
+          inst.op match
+            case InstOp.MATCH =>
+              // Anchoring checks skipped; assume unanchored for now
+              if ncap > 0 && (!matched || matchcap(1) < pos) then
+                t.cap(1) = pos
+                System.arraycopy(t.cap, 0, matchcap, 0, ncap)
+              matchedHere = true
+
+            case InstOp.RUNE =>
+              addNext = inst.matchRune(rune)
+
+            case InstOp.RUNE1 =>
+              addNext = rune == inst.runes(0)
+
+            case InstOp.RUNE_ANY =>
+              addNext = true
+
+            case InstOp.RUNE_ANY_NOT_NL =>
+              addNext = rune != '\n'
+
+            case _ =>
+              throw new IllegalStateException(s"bad inst: ${inst.op}")
+
+          if addNext then
+            t = addTable(inst.out)(this, pos + 1, inst.out, t.cap, nextq, t)
+
+          if t != null then
+            free(t)
+            runq.denseThreads(j) = null
+
+      j += 1
+
+    runq.clear()
+    matchedHere
+
 
   def matches(input: CharSequence): Boolean =
     var runq = q0
@@ -217,5 +271,23 @@ class RE2Machine(val prog: Prog):
       val tmp = runq; runq = nextq; nextq = tmp
 
     // free(runq) // redundant, we aren't short circuiting
-    println(matchcap.mkString(" "))
+    // println(matchcap.mkString(" "))
+    matched
+
+  def matchesWithTable(input: CharSequence, addTable: Array[AddFn]): Boolean =
+    var runq  = q0
+    var nextq = q1
+    var pos   = 0
+    matched   = false
+    java.util.Arrays.fill(matchcap, 0)
+
+    // initialise first thread
+    addTable(prog.start)(this, 0, prog.start, matchcap.clone(), runq, null)
+
+    while !matched && !runq.isEmpty do
+      val rune = if pos < input.length then input.charAt(pos).toInt else -1
+      matched = stepWithTable(addTable, runq, nextq, pos, rune)
+      if pos < input.length then pos += 1
+      val tmp = runq; runq = nextq; nextq = tmp
+    // println(matchcap.mkString(" "))
     matched
