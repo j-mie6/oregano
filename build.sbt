@@ -20,9 +20,10 @@ inThisBuild(List(
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("8"), JavaSpec.temurin("11"), JavaSpec.temurin("17")),
 ))
 
-lazy val root = tlCrossRootProject.aggregate(oregano)
+lazy val root = tlCrossRootProject.aggregate(oregano, benchmark)
 
-lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+// lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+lazy val oregano = crossProject(JVMPlatform)
     .withoutSuffixFor(JVMPlatform)
     .crossType(CrossType.Full)
     .in(file("oregano"))
@@ -42,5 +43,22 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
             "org.scalatestplus" %%% "scalacheck-1-17" % "3.2.18.0" % Test, // NOTE: held back for 0.4 native
         ),
 
+        libraryDependencies += "com.google.re2j" % "re2j" % "1.8",
+        libraryDependencies += "codes.quine.labo" %% "re2s" % "0.1.1-SNAPSHOT",
+
         Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
     )
+
+lazy val benchmark = project
+  .in(file("benchmark"))
+  .enablePlugins(JmhPlugin)
+  .dependsOn(oregano.jvm)
+  .settings(
+    name := "oregano-benchmark",
+    scalaVersion := Scala3,
+    fork := true,
+    libraryDependencies ++= Seq(
+      "org.openjdk.jmh" % "jmh-core" % "1.37",
+      "org.openjdk.jmh" % "jmh-generator-annprocess" % "1.37"
+    )
+  )
