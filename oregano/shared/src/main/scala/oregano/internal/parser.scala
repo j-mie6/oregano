@@ -26,7 +26,8 @@ private object parsers {
     // technically, they can be empty on either side of this... we need an Epsilon
     private lazy val expr: Parsley[Regex] = chain.right1(term)(Alt from '|')
     private lazy val term = Cat(some(chain.postfix(atom)(postfixOps)))
-    private lazy val atom = capture | lit | (Dot from '.') | cls
+    private lazy val atom = nonCapture | capture | lit | (Dot from '.') | cls
+    private lazy val nonCapture = atomic(string("(?:")) ~> expr <~ ')' map NonCapture.apply
     private lazy val capture = '(' ~> expr <~ ')' map Capture.apply
     private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
     // I believe these two can always appear together, are ambiguous, and `charEsc` should always be first, so make it atomic

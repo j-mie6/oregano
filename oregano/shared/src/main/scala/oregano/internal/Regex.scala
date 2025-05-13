@@ -87,6 +87,8 @@ private enum Regex {
     case Alt(r1: Regex, r2: Regex)
     /** `(X)`: X, as a capturing group */
     case Capture(r: Regex)
+    /** `(?:X)`: X, as a non-capturing group */
+    case NonCapture(r: Regex) 
     /** `\n`: whatever the nth capturing group matched */
     case Back(n: Int)
     /** `\k<name>`: whatever the named group name matched */

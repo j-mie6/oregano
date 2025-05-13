@@ -163,10 +163,7 @@ class ProgramCompiler {
 
     case Pattern.Rep0(pat) => 
         val f = compile(pat)
-        if f.nullable then
-          quest(f, false)
-        else
-          star(f, false)
+        loop(f, false)
 
     // case Pattern.Capture(idx, pat) => compile(pat)
     case Pattern.Capture(idx, pat) =>

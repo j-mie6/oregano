@@ -73,6 +73,8 @@ object Pattern {
         val (p, g2) = compile(r, nextGroup + 1)
         (Pattern.Capture(groupId, p), g2)
 
+      case Regex.NonCapture(r) => compile(r, nextGroup)
+
       case _ =>
         throw IllegalArgumentException(s"Unsupported regex: $regex")
     }
