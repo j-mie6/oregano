@@ -80,91 +80,93 @@ object BacktrackingProgMatcher:
       case _ =>
         val inst = prog.getInst(pc)
         inst.op match
+
           case InstOp.MATCH =>
-            '{ 
-              if $pos == $input.length then 
+            '{
+
+              if $pos == $input.length then
                 $cap(1) = $pos
-                $pos 
-              else 
-                -1 
+                $pos
+              else
+                -1
             }
 
           case InstOp.FAIL =>
             '{ -1 }
 
           case InstOp.ALT =>
-            val left = compile(inst.out, end, input, pos, cap)
+            val left  = compile(inst.out, end, input, pos, cap)
             val right = compile(inst.arg, end, input, pos, cap)
-            '{ val lp = $left; if lp >= 0 then lp else $right }
+            '{
+              val oldCap = $cap.clone()
+              val lp = $left
+              if lp >= 0 then lp
+              else
+                Array.copy(oldCap, 0, $cap, 0, $cap.length)
+                $right
+            }
 
           case InstOp.RUNE | InstOp.RUNE1 =>
             val runeCheck = inst.matchRuneExpr
-            val nextPos = '{ $pos + 1 }
-            val success = compile(inst.out, end, input, nextPos, cap)
+            val nextPos   = '{ $pos + 1 }
+            val succ      = compile(inst.out, end, input, nextPos, cap)
             '{
-              if $pos < $input.length && $runeCheck($input.charAt($pos).toInt)
-                then $success
+              if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
+                then $succ
                 else -1
             }
 
           case InstOp.LOOP =>
-            val body = (p: Expr[Int]) => compile(inst.out, pc, input, p, cap)
+            val body = (p: Expr[Int]) => compile(inst.out, pc,  input, p, cap)
             val exit = (p: Expr[Int]) => compile(inst.arg, end, input, p, cap)
             '{
               def loop(pos: Int): Int =
-                val next = ${ body('pos) }
-                if next >= 0 && next != pos then
+                val oldCap = $cap.clone()
+                val next   = ${ body('{pos}) }
+                // if no match or zero-length, restore and exit
+                if next == -1 || next == pos then
+                  Array.copy(oldCap, 0, $cap, 0, $cap.length)
+                  ${ exit('{pos}) }
+                else
                   val attempt = loop(next)
-                  if attempt >= 0 then attempt
-                  else ${ exit('pos) }
-                else ${ exit('pos) }
+                  if attempt >= pos then attempt
+                  else
+                    Array.copy(oldCap, 0, $cap, 0, $cap.length)
+                    ${ exit('{pos}) }
 
               loop($pos)
             }
 
           case InstOp.CAPTURE =>
-            val slot = inst.arg
-            val next = compile(inst.out, end, input, pos, cap)
+            val slot    = inst.arg
+            val nextExp = compile(inst.out, end, input, pos, cap)
+            '{
+              val oldCap = $cap.clone()
+              val curPos  = $pos
+              val res     = $nextExp
 
-            if slot % 2 == 0 then
-              val closeSlot = slot + 1
-              '{
-                val startOld = $cap(${Expr(slot)})
-                val endOld = $cap(${Expr(closeSlot)})
-                $cap(${Expr(slot)}) = $pos
-                val result = $next
-                if result >= 0 then
-                  $cap(${Expr(closeSlot)}) = result
-                  result
-                else
-                  $cap(${Expr(slot)}) = startOld
-                  $cap(${Expr(closeSlot)}) = endOld
-                  -1
-              }
-            else
-              '{
-                val old = $cap(${Expr(slot)})
-                $cap(${Expr(slot)}) = $pos
-                val result = $next
-                if result < 0 then $cap(${Expr(slot)}) = old
-                result
-              }
+              if (res >= 0) then
+                $cap(${Expr(slot)}) = curPos
+                res
+              else
+                Array.copy(oldCap, 0, $cap, 0, $cap.length)
+                -1
+            }
 
           case _ =>
             quotes.reflect.report.errorAndAbort(s"Unsupported op: ${inst.op}")
 
     '{
       (input: CharSequence) =>
-        val cap = new Array[Int](2 * ${Expr(prog.numCap)})
+        val cap = new Array[Int](${Expr(prog.numCap)})
         val result = ${ compile(prog.start, prog.numInst, 'input, '{0}, 'cap) }
-        if result >= 0 then
+        if result == input.length then
           println(cap.mkString(" "))
           true
         else
           false
     }
-
-
+    
   // def matches(prog: Prog, input: CharSequence): Boolean = {
   //   def compile(pc: Int, end: Int, input: CharSequence, pos: Int): Int = {
   //     if (pc == end) return pos

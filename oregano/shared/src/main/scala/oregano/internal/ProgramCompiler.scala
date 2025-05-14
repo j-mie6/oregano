@@ -9,7 +9,6 @@ val MAX_RUNE = 0x10FFFF
 final case class Frag(
   i: Int,                // Instruction index
   out: Int = 0,          // Patch list
-  nullable: Boolean = false
 )
 
 def dietToRanges(diet: Diet[Int]): List[Int] = {
@@ -34,7 +33,7 @@ class ProgramCompiler {
 
   private def newInst(op: InstOp): Frag = {
     val pc = progBuilder.addInst(op)
-    Frag(pc, 0, nullable = true)
+    Frag(pc, 0)
   }
 
   private def nop(): Frag = {
@@ -54,7 +53,7 @@ class ProgramCompiler {
   private def cat(f1: Frag, f2: Frag): Frag = {
     if f1.i == 0 || f2.i == 0 then return fail()
     progBuilder.patch(f1.out, f2.i)
-    Frag(f1.i, f2.out, f1.nullable && f2.nullable)
+    Frag(f1.i, f2.out)
   }
 
   private def alt(f1: Frag, f2: Frag): Frag = {
@@ -65,7 +64,7 @@ class ProgramCompiler {
     i.out = f1.i
     i.arg = f2.i
     val merged = progBuilder.append(f1.out, f2.out)
-    Frag(f.i, merged, f1.nullable || f2.nullable)
+    Frag(f.i, merged)
   }
 
   private def loop(f1: Frag, nongreedy: Boolean): Frag = {
@@ -74,11 +73,11 @@ class ProgramCompiler {
     if nongreedy then
       i.arg = f1.i
       progBuilder.patch(f1.out, f.i)
-      Frag(f.i, f.i << 1, nullable = true)
+      Frag(f.i, f.i << 1)
     else
       i.out = f1.i
       progBuilder.patch(f1.out, f.i)
-      Frag(f.i, (f.i << 1) | 1, nullable = true)
+      Frag(f.i, (f.i << 1) | 1)
   }
 
   private def quest(f1: Frag, nongreedy: Boolean): Frag = {
@@ -90,15 +89,14 @@ class ProgramCompiler {
     else
       i.out = f1.i
       progBuilder.append((f.i << 1) | 1, f1.out)
-    Frag(f.i, patchedOut, nullable = true)
+    Frag(f.i, patchedOut)
   }
 
   private def plus(f1: Frag, nongreedy: Boolean): Frag =
-    Frag(f1.i, loop(f1, nongreedy).out, f1.nullable)
+    Frag(f1.i, loop(f1, nongreedy).out)
 
   private def star(f1: Frag, nongreedy: Boolean): Frag =
-    if f1.nullable then quest(plus(f1, nongreedy), nongreedy)
-    else loop(f1, nongreedy)
+    loop(f1, nongreedy)
 
 //   private def empty(op: Int): Frag = {
 //     val f = newInst(InstOp.EMPTY_WIDTH)
@@ -119,7 +117,6 @@ class ProgramCompiler {
 
     inst.runes = runes
     inst.arg = flags
-    // f.nullable = false
 
     inst.op =
     //   if ((flags & RE2.FOLD_CASE) == 0 && runes.length == 1)
@@ -132,7 +129,7 @@ class ProgramCompiler {
         InstOp.RUNE_ANY
       else InstOp.RUNE
 
-    Frag(f.i, f.i << 1, false)
+    Frag(f.i, f.i << 1)
   }
 
 //   private val ANY_RUNE_NOT_NL = Array(0, '\n' - 1, '\n' + 1, MAX_RUNE)
