@@ -154,7 +154,6 @@ object CPSMatcher:
     def matcher(input: CharSequence): Boolean = {
       val inputLen = input.length
       val groups: Array[Int] = Array.fill(numGroups * 2)(-1)
-      val groupScratch: Array[Array[Int]] = Array.fill(numGroups)(Array.fill(numGroups * 2)(-1)) 
       groups(0) = 0
 
       val endCont: (Int, Array[Int]) => Int = (i, _) =>
@@ -240,7 +239,7 @@ object CPSMatcher:
 
 
 @main def testCPSRuntime =
-  val (pattern, groupCount) = Pattern.compile("(a*b*)*bc|def")
+  val PatternResult(pattern, groupCount, _) = Pattern.compile("(a*b*)*bc|def")
   println(s"ababc: ${CPSMatcher.matches(pattern, groupCount, "ababc")}") // true
   println(s"aaaaabaababc: ${CPSMatcher.matches(pattern, groupCount, "aaaaabaababc")}")   // true
   // println(CPSMatcher.matches(pattern, groupCount, "xyz"))   // false

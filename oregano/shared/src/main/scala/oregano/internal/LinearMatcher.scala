@@ -236,7 +236,7 @@ object LinearMatcher:
 
 @main def vmTest: Unit = {
   println("Basic alternation:")
-  val (basicPattern, basicPatternCaps) = Pattern.compile("a|b")
+  val PatternResult(basicPattern, basicPatternCaps, _) = Pattern.compile("a|b")
   val basicProg = ProgramCompiler.compileRegexp(basicPattern, basicPatternCaps)
 
   println(LinearRuntimeMatcher.matches(basicProg, "a")) // true
@@ -245,14 +245,14 @@ object LinearMatcher:
   println(LinearRuntimeMatcher.matches(basicProg, ""))  // false
 
   println("\nConcatenation:")
-  val (concatPattern, concatPatternCaps) = Pattern.compile("ab")
+  val PatternResult(concatPattern, concatPatternCaps, _) = Pattern.compile("ab")
   val concatProg = ProgramCompiler.compileRegexp(concatPattern, concatPatternCaps)
   println(LinearRuntimeMatcher.matches(concatProg, "ab"))  // true
   println(LinearRuntimeMatcher.matches(concatProg, "a"))   // false
   println(LinearRuntimeMatcher.matches(concatProg, "abc")) // false
 
   println("\nLiteral + alternation:")
-  val (complex, complexCaps) = Pattern.compile("ab|cd")
+  val PatternResult(complex, complexCaps, _) = Pattern.compile("ab|cd")
   val complexProg = ProgramCompiler.compileRegexp(complex, complexCaps)
   println(LinearRuntimeMatcher.matches(complexProg, "ab")) // true
   println(LinearRuntimeMatcher.matches(complexProg, "cd")) // true
@@ -260,7 +260,7 @@ object LinearMatcher:
   println(LinearRuntimeMatcher.matches(complexProg, "abcd")) // false
 
   println("\nCharacter class:")
-  val (classPattern, classPatternCaps) = Pattern.compile("[a-z]")
+  val PatternResult(classPattern, classPatternCaps, _) = Pattern.compile("[a-z]")
   val classProg = ProgramCompiler.compileRegexp(classPattern, classPatternCaps)
   println(LinearRuntimeMatcher.matches(classProg, "a"))  // true
   println(LinearRuntimeMatcher.matches(classProg, "z"))  // true
@@ -268,10 +268,18 @@ object LinearMatcher:
   println(LinearRuntimeMatcher.matches(classProg, "0"))  // false
 
   println("\nKleene Star:")
-  val (starPattern, starPatternCaps) = Pattern.compile("(a|b)*ab")
+  val PatternResult(starPattern, starPatternCaps, _) = Pattern.compile("(a|b)*ab")
   val starProg = ProgramCompiler.compileRegexp(starPattern, starPatternCaps)
   println(LinearRuntimeMatcher.matches(starProg, "ab"))  // true
   println(LinearRuntimeMatcher.matches(starProg, "aab")) // true
   println(LinearRuntimeMatcher.matches(starProg, ""))   // false
-  println(LinearRuntimeMatcher.matches(starProg, "b"))  // true
+  println(LinearRuntimeMatcher.matches(starProg, "b"))  // false
+
+  println("\nNested Loops:")
+  val PatternResult(nestPattern, nestPatternCaps, _) = Pattern.compile("((a)*b*)*")
+  val nestProg = ProgramCompiler.compileRegexp(starPattern, starPatternCaps)
+  println(LinearRuntimeMatcher.matches(nestProg, "ab"))  // true
+  println(LinearRuntimeMatcher.matches(nestProg, "aab")) // true
+  println(LinearRuntimeMatcher.matches(nestProg, "aaabaaa")) // true
+  println(LinearRuntimeMatcher.matches(nestProg, "b"))  // true
 }

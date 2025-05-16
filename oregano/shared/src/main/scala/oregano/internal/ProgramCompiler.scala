@@ -67,7 +67,7 @@ class ProgramCompiler {
     Frag(f.i, merged)
   }
 
-  private def loop(f1: Frag, nongreedy: Boolean): Frag = {
+  private def star(f1: Frag, nongreedy: Boolean): Frag = {
     val f = newInst(InstOp.LOOP)
     val i = progBuilder.getInst(f.i)
     if nongreedy then
@@ -80,23 +80,20 @@ class ProgramCompiler {
       Frag(f.i, (f.i << 1) | 1)
   }
 
-  private def quest(f1: Frag, nongreedy: Boolean): Frag = {
-    val f = newInst(InstOp.ALT)
-    val i = progBuilder.getInst(f.i)
-    val patchedOut = if nongreedy then
-      i.arg = f1.i
-      progBuilder.append(f.i << 1, f1.out)
-    else
-      i.out = f1.i
-      progBuilder.append((f.i << 1) | 1, f1.out)
-    Frag(f.i, patchedOut)
-  }
+  // private def quest(f1: Frag, nongreedy: Boolean): Frag = {
+  //   val f = newInst(InstOp.ALT)
+  //   val i = progBuilder.getInst(f.i)
+  //   val patchedOut = if nongreedy then
+  //     i.arg = f1.i
+  //     progBuilder.append(f.i << 1, f1.out)
+  //   else
+  //     i.out = f1.i
+  //     progBuilder.append((f.i << 1) | 1, f1.out)
+  //   Frag(f.i, patchedOut)
+  // }
 
   private def plus(f1: Frag, nongreedy: Boolean): Frag =
-    Frag(f1.i, loop(f1, nongreedy).out)
-
-  private def star(f1: Frag, nongreedy: Boolean): Frag =
-    loop(f1, nongreedy)
+    Frag(f1.i, star(f1, nongreedy).out)
 
 //   private def empty(op: Int): Frag = {
 //     val f = newInst(InstOp.EMPTY_WIDTH)
@@ -160,7 +157,7 @@ class ProgramCompiler {
 
     case Pattern.Rep0(pat) => 
         val f = compile(pat)
-        loop(f, false)
+        star(f, false)
 
     // case Pattern.Capture(idx, pat) => compile(pat)
     case Pattern.Capture(idx, pat) =>
@@ -223,7 +220,9 @@ object ProgramCompiler {
 
 @main def testProgramCompiler(): Unit = {
   val regex = "(a(b))*c|def"
-  val (pattern, numCap) = Pattern.compile(regex)
-  val frag = ProgramCompiler.compileRegexp(pattern, numCap)
+  val PatternResult(pattern, groupCount, _) = Pattern.compile(regex)
+  // val pattern = patternResult.pattern
+  // val numCap = patternResult.numGroups
+  val frag = ProgramCompiler.compileRegexp(pattern, groupCount)
   println(frag)
 }

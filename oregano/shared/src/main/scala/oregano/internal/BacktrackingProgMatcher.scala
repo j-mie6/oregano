@@ -495,3 +495,8 @@ object BacktrackingProgMatcher:
 
         result >= 0
     }
+
+@main def testProgMatcher(): Unit =
+  val PatternResult(pat, numGroups, _) = Pattern.compile("(a*b*)*bc")
+  val prog = ProgramCompiler.compileRegexp(pat, numGroups)
+  println("prog: " + BacktrackingProgMatcher.matches(prog, "abababc"))
