@@ -150,20 +150,28 @@ object CPSMatcher:
   //     entryFn(0) >= 0
   //   }
 
-  def makeMatcher(pattern: Pattern, numGroups: Int): (CharSequence => Boolean) = {
+  def makeMatcher(pattern: Pattern, numGroups: Int): CharSequence => Boolean = {
     def matcher(input: CharSequence): Boolean = {
       val inputLen = input.length
+      val groups: Array[Int] = Array.fill(numGroups * 2)(-1)
+      val groupScratch: Array[Array[Int]] = Array.fill(numGroups)(Array.fill(numGroups * 2)(-1)) 
+      groups(0) = 0
 
-      val endCont: Int => Int = i =>
-        if i == inputLen then
-          i
-        else -1
+      val endCont: (Int, Array[Int]) => Int = (i, _) =>
+        if i == inputLen then i else -1
 
-      def compile(p: Pattern, cont: Int => Int): Int => Int = p match {
+      def compile(p: Pattern, cont: (Int, Array[Int]) => Int): (Int, Array[Int]) => Int = p match {
         case Pattern.Lit(c) =>
-          (pos: Int) =>
+          (pos, groups) =>
             if pos < inputLen && input.charAt(pos) == c.toChar then
-              cont(pos + 1)
+              cont(pos + 1, groups)
+            else
+              -1
+
+        case Pattern.Class(diet) =>
+          (pos, groups) =>
+            if pos < inputLen && diet.contains(input.charAt(pos).toInt) then
+              cont(pos + 1, groups)
             else
               -1
 
@@ -171,41 +179,55 @@ object CPSMatcher:
           ps.foldRight(cont)((sub, acc) => compile(sub, acc))
 
         case Pattern.Alt(l, r) =>
-          val left  = compile(l, cont)
+          val left = compile(l, cont)
           val right = compile(r, cont)
-          (pos: Int) =>
-            val lp = left(pos)
-            if lp >= 0 then lp else right(pos)
-
-        case Pattern.Class(diet) =>
-          (pos: Int) =>
-            if pos < inputLen && diet.contains(input.charAt(pos).toInt) then
-              cont(pos + 1)
-            else
-              -1
-
-       case Pattern.Rep0(sub) =>
-          def self(pos: Int): Int = {
-            val step = compile(sub, (nextPos: Int) =>
-              if nextPos != pos then self(nextPos)
-              else -1
-            )
-
-            val out = step(pos)
-            if out >= 0 then out else cont(pos)
+          (pos, groups) => {
+            val save = groups.clone() // backtrack-safe
+            val lp = left(pos, groups)
+            if lp >= 0 then lp
+            else right(pos, save)
           }
-          self
+
+        case Pattern.Rep0(sub) =>
+          def loop(pos: Int, groups: Array[Int]): Int = {
+            val scratch = groups.clone()
+
+            val step = compile(sub, (nextPos, innerGroups) => {
+              if nextPos != pos then {
+                val rec = loop(nextPos, innerGroups)
+                if rec >= 0 then {
+                  Array.copy(innerGroups, 0, groups, 0, groups.length)
+                  rec
+                } else -1
+              } else -1 // prevent infinite loop on nullable
+            })
+
+            val out = step(pos, scratch)
+
+            if out >= 0 then out
+            else cont(pos, groups)
+          }
+
+          loop
 
         case Pattern.Capture(idx, sub) =>
-          val inner = compile(sub, cont)
-          (pos: Int) => {
-            val end = inner(pos)
-            end
+          val inner = compile(sub, (endPos, g) => {
+            g(2 * idx + 1) = endPos 
+            cont(endPos, g)
+          })
+
+          (pos, groups) => {
+            groups(2 * idx) = pos
+            inner(pos, groups)
           }
       }
 
       val entryFn = compile(pattern, endCont)
-      entryFn(0) >= 0
+      val matched = entryFn(0, groups)
+      if matched >= 0 then
+        groups(1) = matched
+      println(groups.mkString(" "))
+      matched >= 0
     }
 
     matcher
@@ -219,6 +241,6 @@ object CPSMatcher:
 
 @main def testCPSRuntime =
   val (pattern, groupCount) = Pattern.compile("(a*b*)*bc|def")
-  println(CPSMatcher.matches(pattern, groupCount, "aaaaabababababc")) // true
-  println(CPSMatcher.matches(pattern, groupCount, "def"))   // true
-  println(CPSMatcher.matches(pattern, groupCount, "xyz"))   // false
+  println(s"ababc: ${CPSMatcher.matches(pattern, groupCount, "ababc")}") // true
+  println(s"aaaaabaababc: ${CPSMatcher.matches(pattern, groupCount, "aaaaabaababc")}")   // true
+  // println(CPSMatcher.matches(pattern, groupCount, "xyz"))   // false
