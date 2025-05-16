@@ -46,15 +46,18 @@ object CPSMatcher:
         }
 
       case Pattern.Rep0(sub) =>
-        val step = compile(sub, input, '{ (i: Int) => i })
         '{
-          val stepFn: Int => Int = $step
-          lazy val self: Int => Int = (pos: Int) =>
-            val next = stepFn(pos)
-            if next >= 0 && next != pos then
-              val r = self(next)
-              if r >= 0 then r else $cont(pos)
-            else $cont(pos)
+          lazy val self: Int => Int = (pos: Int) => {
+            val step = ${
+              compile(sub, input, '{
+                (next: Int) =>
+                  if next != pos then self(next) else -1
+              })
+            }
+
+            val r = step(pos)
+            if r >= 0 then r else ${ cont }(pos)
+          }
           self
         }
 
@@ -216,6 +219,6 @@ object CPSMatcher:
 
 @main def testCPSRuntime =
   val (pattern, groupCount) = Pattern.compile("(a*b*)*bc|def")
-  println(CPSMatcher.matches(pattern, groupCount, "abababc")) // true
+  println(CPSMatcher.matches(pattern, groupCount, "aaaaabababababc")) // true
   println(CPSMatcher.matches(pattern, groupCount, "def"))   // true
   println(CPSMatcher.matches(pattern, groupCount, "xyz"))   // false
