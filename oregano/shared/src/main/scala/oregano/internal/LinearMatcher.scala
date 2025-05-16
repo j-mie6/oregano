@@ -6,6 +6,38 @@ import scala.quoted.*
 // note that re2j stores an inst, one less layer of indirection
 // case class Thread(pc: Int, pos: Int) 
 
+// final case class Thread(inst: Inst, pos: Int) 
+
+// final class ThreadQueue(n: Int):
+//   val sparse = new Array[Int](n)
+//   val densePcs = new Array[Int](n)
+//   val denseThreads = new Array[Option[Thread]](n)
+//   var size = 0
+
+//   def isEmpty: Boolean = size == 0
+
+//   def contains(pc: Int): Boolean =
+//     val j = sparse(pc)
+//     j < size && densePcs(j) == pc
+
+//   def add(pc: Int): Int =
+//     val j = size
+//     sparse(pc) = j
+//     densePcs(j) = pc
+//     denseThreads(j) = None
+//     size += 1
+//     j
+
+//   def clear(): Unit =
+//     size = 0
+
+//   def getThread(i: Int): Option[Thread] = denseThreads(i)
+//   def setThread(i: Int, t: Thread): Unit = denseThreads(i) = Some(t)
+
+//   override def toString: String =
+//     densePcs.take(size).mkString("{", ", ", "}")
+
+
 final class Thread(var inst: Inst, var pos: Int) 
 
 final class ThreadQueue(n: Int):
@@ -41,91 +73,66 @@ final class ThreadQueue(n: Int):
   override def toString: String =
     densePcs.take(size).mkString("{", ", ", "}")
 
-// final case class Thread(inst: Inst, pos: Int) 
-
-// final class ThreadQueue(n: Int):
-//   val sparse = new Array[Int](n)
-//   val densePcs = new Array[Int](n)
-//   val denseThreads = new Array[Option[Thread]](n)
-//   var size = 0
-
-//   def isEmpty: Boolean = size == 0
-
-//   def contains(pc: Int): Boolean =
-//     val j = sparse(pc)
-//     j < size && densePcs(j) == pc
-
-//   def add(pc: Int): Int =
-//     val j = size
-//     sparse(pc) = j
-//     densePcs(j) = pc
-//     denseThreads(j) = None
-//     size += 1
-//     j
-
-//   def clear(): Unit =
-//     size = 0
-
-//   def getThread(i: Int): Option[Thread] = denseThreads(i)
-//   def setThread(i: Int, t: Thread): Unit = denseThreads(i) = Some(t)
-
-//   override def toString: String =
-//     densePcs.take(size).mkString("{", ", ", "}")
-
-class LinearRuntimeMatcher(prog: Prog, input: CharSequence) {
-  val inputLength = input.length()
+class LinearRuntimeMatcher(prog: Prog) {
+  val q1 = ThreadQueue(prog.numInst)
+  val q2 = ThreadQueue(prog.numInst)  
 
   def add(q: ThreadQueue, pc: Int, pos: Int): Unit =
-    // println(s"add($pc, $pos, ${prog.getInst(pc)})")
     if (!q.contains(pc))
-      val inst = prog.getInst(pc)
+      val inst = prog.getInst(pc) 
+      val id = q.add(pc)
+      q.setThread(id, inst, pos)
       inst.op match
         case InstOp.FAIL => ()
-        case InstOp.NOP  => add(q, inst.out, pos)
+        case InstOp.NOP | InstOp.CAPTURE => 
+          add(q, inst.out, pos)
         case InstOp.ALT | InstOp.LOOP =>
           add(q, inst.out, pos)
           add(q, inst.arg, pos)
-        case _ =>
-          val id = q.add(pc)
-          q.setThread(id, inst, pos) // optional: if storing Thread object
+        case _ => ()
 
-  def step(runq: ThreadQueue, nextq: ThreadQueue): Boolean =
+
+  def step(pos: Int, rune: Int, runq: ThreadQueue, nextq: ThreadQueue): Boolean =
     var i = 0
     while i < runq.size do
       val inst = runq.getInst(i)
       val pos = runq.getPos(i)
       inst.op match
         case InstOp.MATCH =>
-          if pos == inputLength then return true
+          if rune == -1 then return true
 
         case InstOp.RUNE | InstOp.RUNE1 =>
-          if pos < inputLength && inst.matchRune(input.charAt(pos).toInt) then
+          if pos != -1 && inst.matchRune(rune) then
             add(nextq, inst.out, pos + 1)
-
-        case _ =>
-          throw new RuntimeException(s"Unexpected opcode in step: ${inst.op}")
+        case _ => ()
       i += 1
+    runq.clear()
     false
-}
 
-object LinearRuntimeMatcher {
-  def matches(prog: Prog, input: CharSequence): Boolean =
-    val matcher = LinearRuntimeMatcher(prog, input)
-    var runq = ThreadQueue(prog.numInst)
-    var nextq = ThreadQueue(prog.numInst)
-
-    matcher.add(runq, prog.start, 0)
-
+  def matches(input: CharSequence): Boolean =
+    val inputLen = input.length
+    var pos = 0
     var matched = false
+    var runq = q1
+    var nextq = q2
+
+    add(runq, prog.start, 0)
+
     while !matched && !runq.isEmpty do
-      matched = matcher.step(runq, nextq)
+      val rune = if pos < inputLen then input.charAt(pos).toInt else -1 // EOF
+      matched = step(pos, rune, runq, nextq)
       runq.clear()
       val tmp = runq
       runq = nextq
       nextq = tmp
+      if pos < inputLen then
+        pos += 1
+      else
+        pos = -1 // EOF
 
     matched
 }
+
 type FunctionTable = Array[(Int, CharSequence, ThreadQueue, ThreadQueue) => Boolean]
 
 object LinearMatcher:
@@ -236,50 +243,57 @@ object LinearMatcher:
 
 @main def vmTest: Unit = {
   println("Basic alternation:")
-  val PatternResult(basicPattern, basicPatternCaps, _) = Pattern.compile("a|b")
+  val PatternResult(basicPattern, basicPatternCaps, _, _) = Pattern.compile("a|b")
   val basicProg = ProgramCompiler.compileRegexp(basicPattern, basicPatternCaps)
-
-  println(LinearRuntimeMatcher.matches(basicProg, "a")) // true
-  println(LinearRuntimeMatcher.matches(basicProg, "b")) // true
-  println(LinearRuntimeMatcher.matches(basicProg, "c")) // false
-  println(LinearRuntimeMatcher.matches(basicProg, ""))  // false
+  val basicMatcher = new LinearRuntimeMatcher(basicProg)
+  println(basicMatcher.matches("a")) // true
+  println(basicMatcher.matches("b")) // true
+  println(basicMatcher.matches("c")) // false
+  println(basicMatcher.matches(""))  // false
 
   println("\nConcatenation:")
-  val PatternResult(concatPattern, concatPatternCaps, _) = Pattern.compile("ab")
+  val PatternResult(concatPattern, concatPatternCaps, _, _) = Pattern.compile("ab")
   val concatProg = ProgramCompiler.compileRegexp(concatPattern, concatPatternCaps)
-  println(LinearRuntimeMatcher.matches(concatProg, "ab"))  // true
-  println(LinearRuntimeMatcher.matches(concatProg, "a"))   // false
-  println(LinearRuntimeMatcher.matches(concatProg, "abc")) // false
+  val concatMatcher = new LinearRuntimeMatcher(concatProg)
+  println(concatMatcher.matches("ab"))  // true
+  println(concatMatcher.matches("a"))   // false
+  println(concatMatcher.matches("abc")) // false
 
   println("\nLiteral + alternation:")
-  val PatternResult(complex, complexCaps, _) = Pattern.compile("ab|cd")
+  val PatternResult(complex, complexCaps, _, _) = Pattern.compile("ab|cd")
   val complexProg = ProgramCompiler.compileRegexp(complex, complexCaps)
-  println(LinearRuntimeMatcher.matches(complexProg, "ab")) // true
-  println(LinearRuntimeMatcher.matches(complexProg, "cd")) // true
-  println(LinearRuntimeMatcher.matches(complexProg, "ac")) // false
-  println(LinearRuntimeMatcher.matches(complexProg, "abcd")) // false
+  val complexMatcher = new LinearRuntimeMatcher(complexProg)
+  println(complexMatcher.matches("ab")) // true
+  println(complexMatcher.matches("cd")) // true
+  println(complexMatcher.matches("ac")) // false
+  println(complexMatcher.matches("abcd")) // false
 
   println("\nCharacter class:")
-  val PatternResult(classPattern, classPatternCaps, _) = Pattern.compile("[a-z]")
+  val PatternResult(classPattern, classPatternCaps, _, _) = Pattern.compile("[a-z]")
   val classProg = ProgramCompiler.compileRegexp(classPattern, classPatternCaps)
-  println(LinearRuntimeMatcher.matches(classProg, "a"))  // true
-  println(LinearRuntimeMatcher.matches(classProg, "z"))  // true
-  println(LinearRuntimeMatcher.matches(classProg, "A"))  // false
-  println(LinearRuntimeMatcher.matches(classProg, "0"))  // false
+  val classMatcher = new LinearRuntimeMatcher(classProg)
+  println(classMatcher.matches("a"))  // true
+  println(classMatcher.matches("z"))  // true
+  println(classMatcher.matches("A"))  // false
+  println(classMatcher.matches("0"))  // false
 
   println("\nKleene Star:")
-  val PatternResult(starPattern, starPatternCaps, _) = Pattern.compile("(a|b)*ab")
+  val PatternResult(starPattern, starPatternCaps, _, _) = Pattern.compile("(a|b)*ab")
   val starProg = ProgramCompiler.compileRegexp(starPattern, starPatternCaps)
-  println(LinearRuntimeMatcher.matches(starProg, "ab"))  // true
-  println(LinearRuntimeMatcher.matches(starProg, "aab")) // true
-  println(LinearRuntimeMatcher.matches(starProg, ""))   // false
-  println(LinearRuntimeMatcher.matches(starProg, "b"))  // false
+  val starMatcher = new LinearRuntimeMatcher(starProg)
+  println(starMatcher.matches("ab"))  // true
+  println(starMatcher.matches("aab")) // true
+  println(starMatcher.matches("aabaaab"))   // true
+  println(starMatcher.matches(""))   // false
+  println(starMatcher.matches("b"))  // false
 
   println("\nNested Loops:")
-  val PatternResult(nestPattern, nestPatternCaps, _) = Pattern.compile("((a)*b*)*")
-  val nestProg = ProgramCompiler.compileRegexp(starPattern, starPatternCaps)
-  println(LinearRuntimeMatcher.matches(nestProg, "ab"))  // true
-  println(LinearRuntimeMatcher.matches(nestProg, "aab")) // true
-  println(LinearRuntimeMatcher.matches(nestProg, "aaabaaa")) // true
-  println(LinearRuntimeMatcher.matches(nestProg, "b"))  // true
+  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("(a*b*)*")
+  val nestProg = ProgramCompiler.compileRegexp(nestPattern, nestPatternCaps)
+  val nestMatcher = new LinearRuntimeMatcher(nestProg)
+  println(nestMatcher.matches("ab"))  // true
+  println(nestMatcher.matches("aab")) // true
+  println(nestMatcher.matches("aaabaaa")) // true
+  println(nestMatcher.matches("b"))  // true
+  println(nestMatcher.matches("ababc"))  // true
 }
