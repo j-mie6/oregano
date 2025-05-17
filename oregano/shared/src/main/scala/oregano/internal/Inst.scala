@@ -126,6 +126,7 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
               else
                 '{ r >= ${Expr(lo)} && r <= ${Expr(hi)} }
             }
+            println(s"conditions: ${conditions.mkString(", ")}")
             conditions.reduceLeft((a, b) => '{ $a || $b })
           }
         }
@@ -133,7 +134,6 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
         // Fallback: binary search over ranges
         val pairsArgsExpr = Varargs(pairs.map { case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) })
         '{
-          // could potentially keep Inst around at runtime
           val pairs = IArray($pairsArgsExpr*)
           (r: Int) =>
             var ret = false
@@ -144,8 +144,10 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
               val (rlo, rhi) = pairs(m)
               if r < rlo then hi = m
               else if r > rhi then lo = m + 1
-              ret = true
-              lo = hi
+              else {
+                ret = true
+                lo = hi
+              }
             ret
         }
 
