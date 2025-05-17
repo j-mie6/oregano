@@ -1,7 +1,8 @@
 package oregano.internal
 
 import scala.quoted.*
-import oregano.internal.Regex.Digit.con
+import cats.collections.Diet
+import scala.collection.mutable.ArrayBuffer
 
 final case class MatchResult(input: CharSequence, matches: Array[Int]) {
   def start(group: Int): Int = matches(2 * group)
@@ -9,6 +10,54 @@ final case class MatchResult(input: CharSequence, matches: Array[Int]) {
   def group(group: Int): String =
     input.subSequence(start(group), end(group)).toString
 }
+
+// essentially copy matchRuneExpr; todo: use a common function?
+def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
+  val runes: List[Int] = dietToRanges(diet)
+
+  val pairs: List[(Int, Int)] = runes.grouped(2).collect {
+    case List(lo, hi) => (lo, hi)
+  }.toList
+
+  // vaccuously handle diet with 1 rune
+  if pairs.length <= 4 then
+    '{
+      (r: Int) => ${
+        val conditions = pairs.map { case (lo, hi) =>
+          if lo == hi then
+            '{ r == ${Expr(lo)} }
+          else
+            '{ r >= ${Expr(lo)} && r <= ${Expr(hi)} }
+        }
+        conditions.reduceLeft((a, b) => '{ $a || $b })
+      }
+    }
+
+  else
+    val pairsArgsExpr = Varargs(
+      pairs.map { 
+        case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) 
+      }
+    )
+    '{
+      val pairs = IArray($pairsArgsExpr*)
+      (r: Int) =>
+        var ret = false
+        var lo = 0
+        var hi = pairs.length
+        while lo < hi do
+          val m = lo + (hi - lo) / 2
+          val (rlo, rhi) = pairs(m)
+          if r < rlo then hi = m
+          else if r > rhi then lo = m + 1
+          else {
+            ret = true
+            lo = hi
+          }
+        ret
+    }
+}
+
 
 object CPSMatcher:
   def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] =
@@ -38,26 +87,25 @@ object CPSMatcher:
         }
 
       case Pattern.Class(diet) =>
+        val runeCheckExpr = dietContains(diet)
         '{
           (pos: Int) =>
-            if pos < $input.length && ${Expr(diet)}.contains($input.charAt(pos).toInt) then
+            if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
               $cont(pos + 1)
             else -1
         }
 
-      case Pattern.Rep0(sub) =>
+      case Pattern.Rep0(sub, _) =>
         '{
-          lazy val self: Int => Int = (pos: Int) => {
+          def self(pos: Int): Int =
             val step = ${
               compile(sub, input, '{
                 (next: Int) =>
                   if next != pos then self(next) else -1
               })
             }
-
             val r = step(pos)
             if r >= 0 then r else ${ cont }(pos)
-          }
           self
         }
 
@@ -150,11 +198,115 @@ object CPSMatcher:
   //     entryFn(0) >= 0
   //   }
 
-  def makeMatcher(pattern: Pattern, numGroups: Int): CharSequence => Boolean = {
+  // def makeMatcher(pattern: Pattern, numGroups: Int, numReps: Int): CharSequence => Boolean = {
+  //   def matcher(input: CharSequence): Boolean = {
+  //     val inputLen = input.length
+  //     val groups: Array[Int] = Array.fill(numGroups * 2)(-1)
+  //     // val groupScratch: Array[Array[Int]] = Array.fill(numReps)(Array.fill(numGroups * 2)(-1))
+  //     groups(0) = 0
+
+  //     val endCont: (Int, Array[Int]) => Int = (i, _) =>
+  //       if i == inputLen then 
+  //         println(s"MATCHED: ${groups.mkString(" ")}")
+  //         i 
+  //         else -1
+
+  //     def compile(p: Pattern, cont: (Int, Array[Int]) => Int): (Int, Array[Int]) => Int = p match {
+  //       case Pattern.Lit(c) =>
+  //         (pos, groups) =>
+  //           if pos < inputLen && input.charAt(pos) == c.toChar then
+  //             cont(pos + 1, groups)
+  //           else
+  //             -1
+
+  //       case Pattern.Class(diet) =>
+  //         (pos, groups) =>
+  //           if pos < inputLen && diet.contains(input.charAt(pos).toInt) then
+  //             cont(pos + 1, groups)
+  //           else
+  //             -1
+
+  //       case Pattern.Cat(ps) =>
+  //         ps.foldRight(cont)((sub, acc) => compile(sub, acc))
+
+  //       case Pattern.Alt(l, r) =>
+  //         val left = compile(l, cont)
+  //         val right = compile(r, cont)
+  //         (pos, groups) => {
+  //           val save = groups.clone()
+  //           val lp = left(pos, groups)
+  //           if lp >= 0 then lp
+  //           else right(pos, save)
+  //         }
+
+  //       case Pattern.Rep0(sub, scratchIdx) =>
+  //         def loop(pos: Int, groups: Array[Int]): Int = {
+  //           // val scratch = groupScratch(scratchIdx)
+  //           // Array.copy(groups, 0, scratch, 0, groups.length)
+  //           val scratch = groups.clone()
+  //           println(s"loop($scratchIdx, ${scratch.mkString(",")})")
+
+  //           val step = compile(sub, (nextPos, innerGroups) => {
+  //             if nextPos != pos then {
+  //               val rec = loop(nextPos, innerGroups)
+  //               if rec >= 0 then {
+  //                 Array.copy(innerGroups, 0, groups, 0, groups.length)
+  //                 println(s"copying back, $scratchIdx ${innerGroups.mkString(",")}")
+  //                 rec
+  //               } else -1
+  //             } else -1 // prevent infinite loop on nullable
+  //           })
+
+  //           val out = step(pos, scratch)
+
+  //           if out >= 0 then out
+  //           else cont(pos, groups)
+  //         }
+
+  //         loop
+
+  //       case Pattern.Capture(idx, sub) =>
+  //         val inner = compile(sub, (endPos, g) => {
+  //           g(2 * idx + 1) = endPos 
+  //           cont(endPos, g)
+  //         })
+
+  //         (pos, groups) => {
+  //           groups(2 * idx) = pos
+  //           inner(pos, groups)
+  //         }
+  //     }
+
+  //     val entryFn = compile(pattern, endCont)
+  //     val matched = entryFn(0, groups)
+  //     if matched >= 0 then
+  //       groups(1) = matched
+  //     println(groups.mkString(" "))
+  //     matched >= 0
+  //   }
+
+  //   matcher
+  // }
+
+  def makeMatcher(pattern: Pattern, numGroups: Int, numReps: Int): CharSequence => Boolean = {
     def matcher(input: CharSequence): Boolean = {
       val inputLen = input.length
       val groups: Array[Int] = Array.fill(numGroups * 2)(-1)
       groups(0) = 0
+
+      // Manually manage capture state stack (position, old value). Share?
+      val stack = ArrayBuffer[(Int, Int)]()
+
+      def saveState(pos: Int): Unit = stack += ((pos, groups(pos)))
+
+      def checkpoint(): Int = stack.size
+
+      def restore(checkpoint: Int): Unit = {
+        while (stack.size > checkpoint) {
+          val (pos, oldVal) = stack.remove(stack.size - 1)
+          groups(pos) = oldVal
+        }
+      }
 
       val endCont: (Int, Array[Int]) => Int = (i, _) =>
         if i == inputLen then i else -1
@@ -162,17 +314,13 @@ object CPSMatcher:
       def compile(p: Pattern, cont: (Int, Array[Int]) => Int): (Int, Array[Int]) => Int = p match {
         case Pattern.Lit(c) =>
           (pos, groups) =>
-            if pos < inputLen && input.charAt(pos) == c.toChar then
-              cont(pos + 1, groups)
-            else
-              -1
+            if pos < inputLen && input.charAt(pos) == c.toChar then cont(pos + 1, groups)
+            else -1
 
         case Pattern.Class(diet) =>
           (pos, groups) =>
-            if pos < inputLen && diet.contains(input.charAt(pos).toInt) then
-              cont(pos + 1, groups)
-            else
-              -1
+            if pos < inputLen && diet.contains(input.charAt(pos).toInt) then cont(pos + 1, groups)
+            else -1
 
         case Pattern.Cat(ps) =>
           ps.foldRight(cont)((sub, acc) => compile(sub, acc))
@@ -181,41 +329,46 @@ object CPSMatcher:
           val left = compile(l, cont)
           val right = compile(r, cont)
           (pos, groups) => {
-            val save = groups.clone() // backtrack-safe
+            val cp = checkpoint()
             val lp = left(pos, groups)
             if lp >= 0 then lp
-            else right(pos, save)
+            else {
+              restore(cp)
+              right(pos, groups)
+            }
           }
 
-        case Pattern.Rep0(sub) =>
+        case Pattern.Rep0(sub, _) =>
           def loop(pos: Int, groups: Array[Int]): Int = {
-            val scratch = groups.clone()
+            val cp = checkpoint()
 
-            val step = compile(sub, (nextPos, innerGroups) => {
+            val step = compile(sub, (nextPos, _) => {
               if nextPos != pos then {
-                val rec = loop(nextPos, innerGroups)
-                if rec >= 0 then {
-                  Array.copy(innerGroups, 0, groups, 0, groups.length)
-                  rec
-                } else -1
-              } else -1 // prevent infinite loop on nullable
+                val rec = loop(nextPos, groups)
+                if rec >= 0 then rec else -1
+              } else -1 // prevent infinite loop
             })
 
-            val out = step(pos, scratch)
+            val out = step(pos, groups)
 
             if out >= 0 then out
-            else cont(pos, groups)
+            else {
+              restore(cp)
+              cont(pos, groups)
+            }
           }
 
           loop
 
         case Pattern.Capture(idx, sub) =>
-          val inner = compile(sub, (endPos, g) => {
-            g(2 * idx + 1) = endPos 
-            cont(endPos, g)
+          val inner = compile(sub, (endPos, _) => {
+            saveState(2 * idx + 1)
+            groups(2 * idx + 1) = endPos
+            cont(endPos, groups)
           })
 
           (pos, groups) => {
+            saveState(2 * idx)
             groups(2 * idx) = pos
             inner(pos, groups)
           }
@@ -223,8 +376,7 @@ object CPSMatcher:
 
       val entryFn = compile(pattern, endCont)
       val matched = entryFn(0, groups)
-      if matched >= 0 then
-        groups(1) = matched
+      if matched >= 0 then groups(1) = matched
       println(groups.mkString(" "))
       matched >= 0
     }
@@ -232,14 +384,15 @@ object CPSMatcher:
     matcher
   }
 
-  def matches(pattern: Pattern, numGroups: Int, input: CharSequence): Boolean = {
-    val matcher = makeMatcher(pattern, numGroups)
+
+  def matches(pattern: Pattern, numGroups: Int, numReps: Int, input: CharSequence): Boolean = {
+    val matcher = makeMatcher(pattern, numGroups, numReps)
     matcher(input)
   }
 
 
 @main def testCPSRuntime =
-  val PatternResult(pattern, groupCount, _) = Pattern.compile("(a*b*)*bc|def")
-  println(s"ababc: ${CPSMatcher.matches(pattern, groupCount, "ababc")}") // true
-  println(s"aaaaabaababc: ${CPSMatcher.matches(pattern, groupCount, "aaaaabaababc")}")   // true
+  val PatternResult(pattern, groupCount, _, numReps) = Pattern.compile("(a*b*)*bc|def")
+  println(s"ababc: ${CPSMatcher.matches(pattern, groupCount, numReps,  "ababc")}") // true
+  // println(s"aaaaabaababc: ${CPSMatcher.matches(pattern, groupCount, numReps, "aaaaabaababc")}")   // true
   // println(CPSMatcher.matches(pattern, groupCount, "xyz"))   // false
