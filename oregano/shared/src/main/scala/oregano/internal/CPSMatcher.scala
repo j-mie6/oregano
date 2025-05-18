@@ -11,6 +11,22 @@ final case class MatchResult(input: CharSequence, matches: Array[Int]) {
     input.subSequence(start(group), end(group)).toString
 }
 
+class CheckpointStack(groups: Array[Int]) {
+  val stack = ArrayBuffer[(Int, Int)]()
+
+  inline def saveState(pos: Int): Unit = 
+    stack += ((pos, groups(pos)))
+
+  inline def checkpoint(): Int = stack.size
+
+  inline def restore(checkpoint: Int): Unit = {
+    while (stack.size > checkpoint) {
+      val (pos, oldVal) = stack.remove(stack.size - 1)
+      groups(pos) = oldVal
+    }
+  }
+}
+
 // essentially copy matchRuneExpr; todo: use a common function?
 def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
   val runes: List[Int] = dietToRanges(diet)
@@ -294,19 +310,7 @@ object CPSMatcher:
       val groups: Array[Int] = Array.fill(numGroups * 2)(-1)
       groups(0) = 0
 
-      // Manually manage capture state stack (position, old value). Share?
-      val stack = ArrayBuffer[(Int, Int)]()
-
-      def saveState(pos: Int): Unit = stack += ((pos, groups(pos)))
-
-      def checkpoint(): Int = stack.size
-
-      def restore(checkpoint: Int): Unit = {
-        while (stack.size > checkpoint) {
-          val (pos, oldVal) = stack.remove(stack.size - 1)
-          groups(pos) = oldVal
-        }
-      }
+      val stack = new CheckpointStack(groups)
 
       val endCont: (Int, Array[Int]) => Int = (i, _) =>
         if i == inputLen then i else -1
@@ -329,18 +333,18 @@ object CPSMatcher:
           val left = compile(l, cont)
           val right = compile(r, cont)
           (pos, groups) => {
-            val cp = checkpoint()
+            val cp = stack.checkpoint()
             val lp = left(pos, groups)
             if lp >= 0 then lp
             else {
-              restore(cp)
+              stack.restore(cp)
               right(pos, groups)
             }
           }
 
         case Pattern.Rep0(sub, _) =>
           def loop(pos: Int, groups: Array[Int]): Int = {
-            val cp = checkpoint()
+            val cp = stack.checkpoint()
 
             val step = compile(sub, (nextPos, _) => {
               if nextPos != pos then {
@@ -353,7 +357,7 @@ object CPSMatcher:
 
             if out >= 0 then out
             else {
-              restore(cp)
+              stack.restore(cp)
               cont(pos, groups)
             }
           }
@@ -362,13 +366,13 @@ object CPSMatcher:
 
         case Pattern.Capture(idx, sub) =>
           val inner = compile(sub, (endPos, _) => {
-            saveState(2 * idx + 1)
+            stack.saveState(2 * idx + 1)
             groups(2 * idx + 1) = endPos
             cont(endPos, groups)
           })
 
           (pos, groups) => {
-            saveState(2 * idx)
+            stack.saveState(2 * idx)
             groups(2 * idx) = pos
             inner(pos, groups)
           }
@@ -392,7 +396,8 @@ object CPSMatcher:
 
 
 @main def testCPSRuntime =
-  val PatternResult(pattern, groupCount, _, numReps) = Pattern.compile("(a*b*)*bc|def")
+  val PatternResult(pattern, groupCount, _, numReps) = Pattern.compile("(a*b*)*bc|(def)")
   println(s"ababc: ${CPSMatcher.matches(pattern, groupCount, numReps,  "ababc")}") // true
-  // println(s"aaaaabaababc: ${CPSMatcher.matches(pattern, groupCount, numReps, "aaaaabaababc")}")   // true
+  println(s"aaaaabaababc: ${CPSMatcher.matches(pattern, groupCount, numReps, "aaaaabaababc")}")   // true
+  println(s"def: ${CPSMatcher.matches(pattern, groupCount, numReps, "def")}")   // true
   // println(CPSMatcher.matches(pattern, groupCount, "xyz"))   // false
