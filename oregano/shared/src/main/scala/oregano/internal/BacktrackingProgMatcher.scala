@@ -113,11 +113,12 @@ object BacktrackingProgMatcher:
 
           case InstOp.RUNE | InstOp.RUNE1 =>
             val runeCheck = inst.matchRuneExpr
-            val nextPos   = '{ $pos + 1 }
-            val succ      = compile(inst.out, end, input, nextPos)
+            val nextPos = '{ $pos + 1 }
+            val succ = compile(inst.out, end, input, nextPos)
             '{
               if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
-                then $succ
+                then 
+                  $succ
                 else -1
             }
 
@@ -155,7 +156,7 @@ object BacktrackingProgMatcher:
     }
     
 
-  def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
+  def genMatcherWithCapsNaive(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
     def compile(
       pc: Int,
       end: Int,
@@ -215,7 +216,7 @@ object BacktrackingProgMatcher:
                 val next = ${ body('{pos}) }
                 // if no match or zero-length, restore and exit
                 if next == -1 || next == pos then
-                  println(s"restoring cap: ${$cap.mkString(", ")}, oldCap: ${oldCap.mkString(", ")}")
+                  // println(s"restoring cap: ${$cap.mkString(", ")}, oldCap: ${oldCap.mkString(", ")}")
                   Array.copy(oldCap, 0, $cap, 0, $cap.length)
                   ${ exit('{pos}) }
                 else
@@ -389,7 +390,7 @@ object BacktrackingProgMatcher:
     } else false
   }
 
-  def genMatcherExperiment(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
+  def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
     def compile(
       pc: Int,
       end: Int,
@@ -497,6 +498,6 @@ object BacktrackingProgMatcher:
     }
 
 @main def testProgMatcher(): Unit =
-  val PatternResult(pat, numGroups, _) = Pattern.compile("(a*b*)*bc")
+  val PatternResult(pat, numGroups, _, _) = Pattern.compile("(a*b*)*bc")
   val prog = ProgramCompiler.compileRegexp(pat, numGroups)
   println("prog: " + BacktrackingProgMatcher.matches(prog, "abababc"))
