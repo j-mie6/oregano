@@ -243,7 +243,7 @@ class RuntimeCPSMatcherTests_NestedAltRep extends AnyFlatSpec {
   val PatternResult(pattern, groupCount, _, numReps) =
     Pattern.compile("(((a)|b|cd)*)e")
 
-  behavior of "CPSMatcher.matchesWithCaps - ((a|b|cd)*)e"
+  behavior of "CPSMatcher.matchesWithCaps - (((a)|b|cd)*)e"
 
   val cases = Table(
     ("input", "expectedCaps"),
