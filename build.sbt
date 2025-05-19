@@ -22,8 +22,7 @@ inThisBuild(List(
 
 lazy val root = tlCrossRootProject.aggregate(oregano, benchmark)
 
-// lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
-lazy val oregano = crossProject(JVMPlatform)
+lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
     .withoutSuffixFor(JVMPlatform)
     .crossType(CrossType.Full)
     .in(file("oregano"))
@@ -43,11 +42,14 @@ lazy val oregano = crossProject(JVMPlatform)
             "org.scalatestplus" %%% "scalacheck-1-17" % "3.2.18.0" % Test, // NOTE: held back for 0.4 native
         ),
 
-        libraryDependencies += "com.google.re2j" % "re2j" % "1.8",
-        libraryDependencies += "codes.quine.labo" %% "re2s" % "0.1.1-SNAPSHOT",
-
         Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
     )
+
+lazy val oreganoJvm = oregano.jvm.settings(
+  libraryDependencies += "org.scala-lang" %% "scala3-staging" % Scala3 % Test,
+  libraryDependencies += "com.google.re2j" % "re2j" % "1.8",
+  libraryDependencies += "codes.quine.labo" %% "re2s" % "0.1.1-SNAPSHOT",
+)
 
 lazy val benchmark = project
   .in(file("benchmark"))

@@ -126,7 +126,6 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
               else
                 '{ r >= ${Expr(lo)} && r <= ${Expr(hi)} }
             }
-            println(s"conditions: ${conditions.mkString(", ")}")
             conditions.reduceLeft((a, b) => '{ $a || $b })
           }
         }

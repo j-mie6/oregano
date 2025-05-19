@@ -24,6 +24,7 @@ private inline def stagedMatcherWithCapsFrom(regex: String): CharSequence => Opt
   }
 
 // need to be in same class, runtime MSP is not multithread safe
+// seems to break every now and then
 class StagedProgMatcherTests extends AnyFlatSpec {
 
   val nestedMatcher = stagedMatcherFrom("(ab)*bc|(def)")
@@ -199,7 +200,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val matcherCapsWithLoops = stagedMatcherWithCapsFrom("((a*)b*)bc|(def)")
+  val matcherCapsWithSequentialLoops = stagedMatcherWithCapsFrom("((a*)b*)bc|(def)")
 
   behavior of "StagedProgMatcher - matchesWithCaps - ((a*)b*)bc|(def)"
 
@@ -222,7 +223,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     )
 
     forAll(cases) { (input, expectedOpt) =>
-      val actualOpt = matcherCapsWithLoops(input)
+      val actualOpt = matcherCapsWithSequentialLoops(input)
 
       withClue(s"Input: '$input'") {
         (actualOpt, expectedOpt) match {
