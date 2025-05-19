@@ -390,7 +390,7 @@ object BacktrackingProgMatcher:
     } else false
   }
 
-  def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
+  def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
     def compile(
       pc: Int,
       end: Int,
@@ -447,19 +447,20 @@ object BacktrackingProgMatcher:
             '{
               def loop(pos: Int): Int =
                 // println(s"cloning")
-                Array.copy($cap, 0, $capCopy, 0, $cap.length)
+                // maybe we don't even need this accepting the constraint on nestin
+                // Array.copy($cap, 0, $capCopy, 0, $cap.length)
                 val next = ${ body('{pos}) }
                 // if no match or zero-length, restore and exit
                 if next == -1 || next == pos then
                   // println(s"restoring cap: ${$cap.mkString(", ")}, oldCap: ${$capCopy.mkString(", ")}")
-                  Array.copy($capCopy, 0, $cap, 0, $cap.length)
+                  // Array.copy($capCopy, 0, $cap, 0, $cap.length)
                   ${ exit('{pos}) }
                 else
                   val attempt = loop(next)
                   if attempt >= pos then attempt
                   else
                     // println(s"restoring cap: ${$cap.mkString(", ")}, oldCap: ${$capCopy.mkString(", ")}")
-                    Array.copy($capCopy, 0, $cap, 0, $cap.length)
+                    // Array.copy($capCopy, 0, $cap, 0, $cap.length)
                     ${ exit('{pos}) }
 
               loop($pos)
@@ -488,13 +489,14 @@ object BacktrackingProgMatcher:
     '{
       (input: CharSequence) =>
         val capCopy = new Array[Int](${Expr(prog.numCap)})
-        val groups = new Array[Int](${Expr(prog.numCap)})
+        val groups = Array.fill(${Expr(prog.numCap)})(-1)
+        groups(0) = 0
         val result = ${ compile(prog.start, prog.numInst, 'input, '{0}, 'capCopy, 'groups) }
 
         // Debug group output
         println("groups: " + groups.mkString(", "))
 
-        result >= 0
+        if result >= 0 then Some(groups) else None
     }
 
 @main def testProgMatcher(): Unit =

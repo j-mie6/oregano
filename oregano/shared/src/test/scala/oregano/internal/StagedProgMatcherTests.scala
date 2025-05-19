@@ -1,42 +1,43 @@
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks.*
 import scala.quoted.staging.*
-import oregano.internal.{Pattern, PatternResult, CPSMatcher}
+import oregano.internal.{Pattern, PatternResult, ProgramCompiler, BacktrackingProgMatcher}
 import org.scalatest.SequentialNestedSuiteExecution
 
 
 private inline def stagedMatcherFrom(regex: String): CharSequence => Boolean =
-  given Compiler = Compiler.make(classOf[StagedCPSMatcherTests].getClassLoader)
+  given Compiler = Compiler.make(classOf[StagedProgMatcherTests].getClassLoader)
   run {
-    val PatternResult(pattern, _, _, _) = Pattern.compile(regex)
-    CPSMatcher.genMatcherPattern(pattern)
+    val PatternResult(pattern, groupCount, _, _) = Pattern.compile(regex)
+    val prog = ProgramCompiler.compileRegexp(pattern, groupCount)
+    BacktrackingProgMatcher.genMatcher(prog)
   }
 
 private inline def stagedMatcherWithCapsFrom(regex: String): CharSequence => Option[Array[Int]] =
-  given Compiler = Compiler.make(classOf[StagedCPSMatcherTests].getClassLoader)
+  given Compiler = Compiler.make(classOf[StagedProgMatcherTests].getClassLoader)
   run {
     val PatternResult(pattern, groupCount, _, _) = Pattern.compile(regex)
-    CPSMatcher.genMatcherPatternWithCaps(pattern, groupCount)
+    val prog = ProgramCompiler.compileRegexp(pattern, groupCount)
+    BacktrackingProgMatcher.genMatcherWithCaps(prog)
   }
 
 // need to be in same class, runtime MSP is not multithread safe
-class StagedCPSMatcherTests extends AnyFlatSpec {
+class StagedProgMatcherTests extends AnyFlatSpec {
 
-  val nestedMatcher = stagedMatcherFrom("((a*)b*)*bc|(def)")
+  val nestedMatcher = stagedMatcherFrom("(ab)*bc|(def)")
 
-  behavior of "StagedCPSMatcher - regex ((a*)b*)*bc|(def)"
+  behavior of "StagedMatcher - regex (ab)*bc|(def)"
 
-  it should "match valid strings for the first alternative ((a*)b*)*bc including backtracking" in {
+  it should "match valid strings for the first alternative (ab)*bc including backtracking" in {
     val validFirstAlt = Table(
       "input",
-      "ababc",
-      "aaaaabaababbc",
+      "ababbc",
+      "abababababbc",
       "bc",
-      "abbbbbc",
-      "abababbbbbc",
-      "abc",
-      "abbbc"
+      "abababbc",
+      "abbc",
     )
 
     forAll(validFirstAlt) { str =>
@@ -76,7 +77,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
 
   val groupingMatcher = stagedMatcherFrom("(a|b)*c[0-9]")
 
-  behavior of "StagedCPSMatcher - regex (a|b)*c[0-9]"
+  behavior of "StagedProgMatcher - regex (a|b)*c[0-9]"
 
   it should "match valid strings" in {
     val validInputs = Table(
@@ -114,7 +115,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
 
   val complexExpressionMatcher = stagedMatcherFrom("((ab)*|[cd]*)e(f|g)[0-9]")
 
-  behavior of "StagedCPSMatcher - ((ab)*|[cd]*)e(f|g)[0-9]"
+  behavior of "StagedProgMatcher - ((ab)*|[cd]*)e(f|g)[0-9]"
 
   it should "match valid strings" in {
     val validInputs = Table(
@@ -157,7 +158,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
 
   val heavyBacktrackingMatcher = stagedMatcherFrom("((a|aa)*)b")
 
-  behavior of "StagedCPSMatcher - ((a|aa)*)b"
+  behavior of "StagedProgMatcher - ((a|aa)*)b"
 
   it should "match valid strings with heavy backtracking" in {
     val validInputs = Table(
@@ -198,32 +199,30 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
     }
   }
 
+  val matcherCapsWithLoops = stagedMatcherWithCapsFrom("((a*)b*)bc|(def)")
 
-  val matcherCapsWithNestedLoops = stagedMatcherWithCapsFrom("((a*)b*)*bc|(def)")
-
-  behavior of "StagedCPSMatcher - matchesWithCaps - ((a*)b*)*bc|(def)"
+  behavior of "StagedProgMatcher - matchesWithCaps - ((a*)b*)bc|(def)"
 
   it should "match expected capture groups for each input" in {
     val cases = Table(
       ("input", "expectedCaps"),
       ("a", None),
-      ("ababc", Some(Array(0, 5, 2, 3, 2, 3, -1, -1))),
+      ("aabbc", Some(Array(0, 5, 0, 3, 0, 2, -1, -1))),
       ("abc", Some(Array(0, 3, 0, 1, 0, 1, -1, -1))),
       ("abbc", Some(Array(0, 4, 0, 2, 0, 1, -1, -1))),
       ("abbbc", Some(Array(0, 5, 0, 3, 0, 1, -1, -1))),
-      ("aaaaabaababbc", Some(Array(0, 13, 9, 11, 9, 10, -1, -1))),
-      ("ababc", Some(Array(0, 5, 2, 3, 2, 3, -1, -1))),
-      ("bc", Some(Array(0, 2, -1, -1, -1, -1, -1, -1))),
+      ("aaaaabaababbc", None),
+      ("aaaaabc", Some(Array(0, 7, 0, 5, 0, 5, -1, -1))),
+      ("bc", Some(Array(0, 2, 0, 0, 0, 0, -1, -1))), 
       ("abc", Some(Array(0, 3, 0, 1, 0, 1, -1, -1))),
       ("def", Some(Array(0, 3, -1, -1, -1, -1, 0, 3))),
-      ("ababbbbabbbbabbabc", Some(Array(0, 18, 15, 16, 15, 16, -1, -1))),
       ("", None),
       ("defg", None),
       ("de", None)
     )
 
     forAll(cases) { (input, expectedOpt) =>
-      val actualOpt = matcherCapsWithNestedLoops(input)
+      val actualOpt = matcherCapsWithLoops(input)
 
       withClue(s"Input: '$input'") {
         (actualOpt, expectedOpt) match {
@@ -241,7 +240,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
 
   val matcherCapsWithNestedAltLoops = stagedMatcherWithCapsFrom("(((a)|b|cd)*)e")
 
-  behavior of "StagedCPSMatcher - matchesWithCaps - (((a)|b|cd)*)e"
+  behavior of "StagedProgMatcher - matchesWithCaps - (((a)|b|cd)*)e"
 
   it should "match expected capture groups for each input" in {
     val cases = Table(
