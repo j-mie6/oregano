@@ -146,14 +146,114 @@ object CPSMatcher:
     }
 
   // using stack!
-  def genMatcherPatternWithCaps(pattern: Pattern, groupCount: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
+  // def genMatcherPatternWithCaps(pattern: Pattern, groupCount: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
+  //   def compile(
+  //     p: Pattern,
+  //     input: Expr[CharSequence],
+  //     groups: Expr[Array[Int]],
+  //     stack: Expr[CheckpointStack],
+  //     cont: Expr[(Int, Array[Int]) => Int]
+  //   ): Expr[(Int, Array[Int]) => Int] = p match
+  //     case Pattern.Lit(c) =>
+  //       '{
+  //         (pos: Int, groups: Array[Int]) =>
+  //           if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
+  //             $cont(pos + 1, groups)
+  //           else -1
+  //       }
+
+  //     case Pattern.Class(diet) =>
+  //       val runeCheckExpr = dietContains(diet)
+  //       '{
+  //         (pos: Int, groups: Array[Int]) =>
+  //           if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
+  //             $cont(pos + 1, groups)
+  //           else -1
+  //       }
+
+  //     case Pattern.Cat(ps) =>
+  //       ps.foldRight(cont)((sub, acc) => compile(sub, input, groups, stack, acc))
+
+  //     case Pattern.Alt(l, r) =>
+  //       val left = compile(l, input, groups, stack, cont)
+  //       val right = compile(r, input, groups, stack, cont)
+  //       '{
+  //         (pos: Int, groups: Array[Int]) =>
+  //           val cp = $stack.checkpoint()
+  //           val lp = $left(pos, groups)
+  //           if lp >= 0 then lp
+  //           else {
+  //             $stack.restore(cp)
+  //             $right(pos, groups)
+  //           }
+  //       }
+
+  //     case Pattern.Rep0(sub, _) =>
+  //       // recursive loop
+  //       val body = '{
+  //         def self(pos: Int, groups: Array[Int]): Int =
+  //           val cp = $stack.checkpoint()
+  //           val step = ${
+  //             compile(sub, input, 'groups, stack, '{
+  //               (next: Int, _: Array[Int]) =>
+  //                 if next != pos then self(next, groups) else -1
+  //             })
+  //           }
+  //           val out = step(pos, groups)
+  //           if out >= 0 then out
+  //           else {
+  //             $stack.restore(cp)
+  //             $cont(pos, groups)
+  //           }
+  //         self
+  //       }
+  //       body
+
+  //     case Pattern.Capture(idx, sub) =>
+  //       val inner = compile(sub, input, groups, stack, '{
+  //         (endPos: Int, _: Array[Int]) =>
+  //           $stack.saveState(${Expr(2 * idx + 1)})
+  //           $groups(${Expr(2 * idx + 1)}) = endPos
+  //           $cont(endPos, $groups)
+  //       })
+
+  //       '{
+  //         (pos: Int, groups: Array[Int]) =>
+  //           $stack.saveState(${Expr(2 * idx)})
+  //           groups(${Expr(2 * idx)}) = pos
+  //           $inner(pos, groups)
+  //       }
+
+  //   '{
+  //     (input: CharSequence) =>
+  //       val inputLen = input.length
+  //       val groups = Array.fill(${Expr(groupCount * 2)})(-1)
+  //       groups(0) = 0
+  //       val stack = new CheckpointStack(groups)
+
+  //       val cont = (i: Int, _: Array[Int]) =>
+  //         if i == inputLen then i else -1
+
+  //       val entry = ${
+  //         compile(pattern, 'input, 'groups, 'stack, 'cont)
+  //       }
+
+  //       val result = entry(0, groups)
+  //       if result >= 0 then 
+  //         groups(1) = result
+  //         Some(groups) 
+  //       else None
+  //   }
+
+  // using explicit call-stack tracking a la java.util.regex
+  def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
     def compile(
       p: Pattern,
       input: Expr[CharSequence],
       groups: Expr[Array[Int]],
-      stack: Expr[CheckpointStack],
       cont: Expr[(Int, Array[Int]) => Int]
     ): Expr[(Int, Array[Int]) => Int] = p match
+
       case Pattern.Lit(c) =>
         '{
           (pos: Int, groups: Array[Int]) =>
@@ -172,29 +272,28 @@ object CPSMatcher:
         }
 
       case Pattern.Cat(ps) =>
-        ps.foldRight(cont)((sub, acc) => compile(sub, input, groups, stack, acc))
+        ps.foldRight(cont)((sub, acc) => compile(sub, input, groups, acc))
 
       case Pattern.Alt(l, r) =>
-        val left = compile(l, input, groups, stack, cont)
-        val right = compile(r, input, groups, stack, cont)
+        val left  = compile(l, input, groups, cont)
+        val right = compile(r, input, groups, cont)
         '{
           (pos: Int, groups: Array[Int]) =>
-            val cp = $stack.checkpoint()
+            val saved = java.util.Arrays.copyOf(groups, groups.length)
             val lp = $left(pos, groups)
             if lp >= 0 then lp
             else {
-              $stack.restore(cp)
+              java.util.Arrays.setAll(groups, i => saved(i)) // restore
               $right(pos, groups)
             }
         }
 
       case Pattern.Rep0(sub, _) =>
-        // recursive loop
-        val body = '{
+        '{
           def self(pos: Int, groups: Array[Int]): Int =
-            val cp = $stack.checkpoint()
+            val saved = java.util.Arrays.copyOf(groups, groups.length)
             val step = ${
-              compile(sub, input, 'groups, stack, '{
+              compile(sub, input, 'groups, '{
                 (next: Int, _: Array[Int]) =>
                   if next != pos then self(next, groups) else -1
               })
@@ -202,47 +301,52 @@ object CPSMatcher:
             val out = step(pos, groups)
             if out >= 0 then out
             else {
-              $stack.restore(cp)
+              java.util.Arrays.setAll(groups, i => saved(i))
               $cont(pos, groups)
             }
           self
         }
-        body
 
       case Pattern.Capture(idx, sub) =>
-        val inner = compile(sub, input, groups, stack, '{
+        val inner = compile(sub, input, groups, '{
           (endPos: Int, _: Array[Int]) =>
-            $stack.saveState(${Expr(2 * idx + 1)})
-            $groups(${Expr(2 * idx + 1)}) = endPos
-            $cont(endPos, $groups)
+            val savedEnd = $groups(2 * ${Expr(idx)} + 1)
+            $groups(2 * ${Expr(idx)} + 1) = endPos
+            val res = $cont(endPos, $groups)
+            if res >= 0 then res
+            else {
+              $groups(2 * ${Expr(idx)} + 1) = savedEnd
+              -1
+            }
         })
-
         '{
           (pos: Int, groups: Array[Int]) =>
-            $stack.saveState(${Expr(2 * idx)})
-            groups(${Expr(2 * idx)}) = pos
-            $inner(pos, groups)
+            val savedStart = groups(2 * ${Expr(idx)})
+            groups(2 * ${Expr(idx)}) = pos
+            val res = $inner(pos, groups)
+            if res >= 0 then res
+            else {
+              groups(2 * ${Expr(idx)}) = savedStart
+              -1
+            }
         }
 
     '{
       (input: CharSequence) =>
         val inputLen = input.length
-        val groups = Array.fill(${Expr(groupCount * 2)})(-1)
+        val groups = Array.fill(${Expr(numGroups * 2)})(-1)
         groups(0) = 0
-        val stack = new CheckpointStack(groups)
 
         val cont = (i: Int, _: Array[Int]) =>
           if i == inputLen then i else -1
 
-        val entry = ${
-          compile(pattern, 'input, 'groups, 'stack, 'cont)
-        }
+        val matcherFn = ${ compile(pattern, 'input, 'groups, 'cont) }
 
-        val result = entry(0, groups)
-        if result >= 0 then 
-          groups(1) = result
-          Some(groups) 
-        else None
+        val matched = matcherFn(0, groups)
+        if matched >= 0 then {
+          groups(1) = matched // end of match
+          Some(groups)
+        } else None
     }
 
   // def makeMatcher(pattern: Pattern, numGroups: Int): CharSequence => Boolean =
