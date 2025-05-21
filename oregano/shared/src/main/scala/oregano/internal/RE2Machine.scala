@@ -53,17 +53,18 @@ class RE2Machine(val prog: Prog):
   var ncap: Int = prog.numCap
 
 
-  def init(ncap: Int): Unit =
-    this.ncap = ncap
-    if (ncap > matchcap.length) then
-      pool.foreach(t => t.cap = new Array[Int](ncap))
-      matchcap = new Array[Int](ncap)
-    else
-      for i <- 0 until poolSize do
-        val t = pool(i)
-        if t != null then
-          t.cap = new Array[Int](ncap)
-          pool(i) = t
+  // used if recycling machines across mutliple expressions
+  // def init(ncap: Int): Unit =
+  //   this.ncap = ncap
+  //   if (ncap > matchcap.length) then
+  //     pool.foreach(t => t.cap = new Array[Int](ncap))
+  //     matchcap = new Array[Int](ncap)
+  //   else
+  //     for i <- 0 until poolSize do
+  //       val t = pool(i)
+  //       if t != null then
+  //         t.cap = new Array[Int](ncap)
+  //         pool(i) = t
 
   def submatches(): Array[Int] =
     if ncap == 0 then Array.empty[Int]
@@ -152,18 +153,16 @@ class RE2Machine(val prog: Prog):
         val inst = t.inst
 
         // Longest-match pruning
-        if matched && ncap > 0 && matchcap(0) < t.cap(0) then
+        if matchedHere && ncap > 0 && matchcap(0) < t.cap(0) then
           free(t)
         else
           var addNext = false
-          // println(s"step at pos=$pos, char=${rune}, inst=${inst}, cap=${t.cap.mkString(",")}")
           inst.op match
             case InstOp.MATCH =>
-              // Anchoring checks skipped; assume unanchored for now
-              if ncap > 0 && (!matched || matchcap(1) < pos) then
+              if rune == -1 && !matchedHere then
                 t.cap(1) = pos
                 System.arraycopy(t.cap, 0, matchcap, 0, ncap)
-              matchedHere = true
+                matchedHere = true
 
             case InstOp.RUNE =>
               addNext = inst.matchRune(rune)
@@ -192,6 +191,28 @@ class RE2Machine(val prog: Prog):
     runq.clear()
     matchedHere
 
+  def matches(input: CharSequence): Boolean =
+    var runq = q0
+    var nextq = q1
+    var pos = 0
+    matched = false
+    matchcap.indices.foreach(i => matchcap(i) = 0)
+
+    val _ = add(prog.start, 0, matchcap.clone(), runq, null)
+
+    while !matched && !runq.isEmpty do
+      val rune =
+        if pos < input.length then input.charAt(pos).toInt
+        else -1 // EOF
+
+      matched = step(runq, nextq, pos, rune)
+
+      // Only advance position if not at EOF
+      if pos < input.length then pos += 1
+      val tmp = runq; runq = nextq; nextq = tmp
+    
+    matched
+
   def stepWithTable(
     addTable: Array[AddFn],
     runq: RE2Queue,
@@ -219,7 +240,7 @@ class RE2Machine(val prog: Prog):
               if ncap > 0 && (!matched || matchcap(1) < pos) then
                 t.cap(1) = pos
                 System.arraycopy(t.cap, 0, matchcap, 0, ncap)
-              matchedHere = true
+                // matchedHere = true
 
             case InstOp.RUNE =>
               addNext = inst.matchRune(rune)
@@ -249,31 +270,6 @@ class RE2Machine(val prog: Prog):
     matchedHere
 
 
-  def matches(input: CharSequence): Boolean =
-    var runq = q0
-    var nextq = q1
-    var pos = 0
-    matched = false
-    matchcap.indices.foreach(i => matchcap(i) = 0)
-
-    add(prog.start, 0, matchcap.clone(), runq, null)
-
-    while !matched && !runq.isEmpty do
-      // println(s"$pos")
-      val rune =
-        if pos < input.length then input.charAt(pos).toInt
-        else -1 // EOF
-
-      matched = step(runq, nextq, pos, rune)
-
-      // Only advance position if not at EOF
-      if pos < input.length then pos += 1
-      val tmp = runq; runq = nextq; nextq = tmp
-
-    // free(runq) // redundant, we aren't short circuiting
-    // println(matchcap.mkString(" "))
-    matched
-
   def matchesWithTable(input: CharSequence, addTable: Array[AddFn]): Boolean =
     var runq  = q0
     var nextq = q1
@@ -291,3 +287,11 @@ class RE2Machine(val prog: Prog):
       val tmp = runq; runq = nextq; nextq = tmp
     // println(matchcap.mkString(" "))
     matched
+
+@main def testRE2Machine(): Unit =
+  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((a)*b*)*")
+  val prog = ProgramCompiler.compileRegexp(nestPattern, nestPatternCaps)
+  val machine = RE2Machine(prog)
+  println(machine.matches("aaabaaa"))
+  println(machine.matches("cbaba"))
+  println(machine.matches("aaabaaac"))
