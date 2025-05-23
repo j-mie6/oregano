@@ -50,7 +50,9 @@ class RE2Machine(val prog: Prog):
   var poolSize: Int = pool.length
   var matched: Boolean = false
   var matchcap: Array[Int] = new Array[Int](prog.numCap)
-  var ncap: Int = prog.numCap
+  // note: re2 will match twice, only tracking groups if .group is called: this is an API decision, for simplicity we track all groups
+  // if desired, can be set to 2 to prevent tracking all groups
+  var ncap: Int = prog.numCap 
 
 
   // used if recycling machines across mutliple expressions
@@ -130,7 +132,7 @@ class RE2Machine(val prog: Prog):
       case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL =>
         val thread = if t == null then alloc(inst) else { t.inst = inst; t }
         if ncap > 0 && (thread.cap ne cap) then
-          System.arraycopy(cap, 0, thread.cap, 0, ncap)
+          Array.copy(cap, 0, thread.cap, 0, ncap)
         q.denseThreads(d) = thread
         null
 
@@ -153,7 +155,7 @@ class RE2Machine(val prog: Prog):
         val inst = t.inst
 
         // Longest-match pruning
-        if matchedHere && ncap > 0 && matchcap(0) < t.cap(0) then
+        if matchedHere then
           free(t)
         else
           var addNext = false
@@ -161,7 +163,7 @@ class RE2Machine(val prog: Prog):
             case InstOp.MATCH =>
               if rune == -1 && !matchedHere then
                 t.cap(1) = pos
-                System.arraycopy(t.cap, 0, matchcap, 0, ncap)
+                Array.copy(t.cap, 0, matchcap, 0, ncap)
                 matchedHere = true
 
             case InstOp.RUNE =>
@@ -196,7 +198,8 @@ class RE2Machine(val prog: Prog):
     var nextq = q1
     var pos = 0
     matched = false
-    matchcap.indices.foreach(i => matchcap(i) = 0)
+    matchcap.indices.foreach(i => matchcap(i) = -1)
+    matchcap(0) = 0
 
     val _ = add(prog.start, 0, matchcap.clone(), runq, null)
 
@@ -211,6 +214,7 @@ class RE2Machine(val prog: Prog):
       if pos < input.length then pos += 1
       val tmp = runq; runq = nextq; nextq = tmp
     
+    // println(matchcap.mkString(","))
     matched
 
   def stepWithTable(
@@ -289,9 +293,10 @@ class RE2Machine(val prog: Prog):
     matched
 
 @main def testRE2Machine(): Unit =
-  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((a)*b*)*")
+  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((a|b)*|(cd)*)*")
   val prog = ProgramCompiler.compileRegexp(nestPattern, nestPatternCaps)
   val machine = RE2Machine(prog)
-  println(machine.matches("aaabaaa"))
-  println(machine.matches("cbaba"))
-  println(machine.matches("aaabaaac"))
+  println(machine.matches("abababcdcdcdababab"))
+  println(machine.matches("abababcdcdcdababa"))
+  println(machine.matches("abababcdcdcd"))
+  println(machine.matches("abababcdcdc"))
