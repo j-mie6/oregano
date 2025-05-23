@@ -1,5 +1,9 @@
 package oregano.internal
 
+abstract class Machine {
+  def matches(input: CharSequence): Boolean
+}
+
 /* 
 A Scala port of the RE2J machine, currently to help me reason about things
 */
@@ -43,7 +47,7 @@ class RE2Queue(n: Int):
   def getCap(pc: Int): Array[Int] =
     denseThreads(sparse(pc)).cap
 
-class RE2Machine(val prog: Prog):
+class RE2Machine(val prog: Prog) extends Machine:
   val q0 = new RE2Queue(prog.numInst)
   val q1 = new RE2Queue(prog.numInst)
   var pool: Array[RE2Thread] = Array.fill(10)(RE2Thread(prog.numCap))
@@ -154,39 +158,38 @@ class RE2Machine(val prog: Prog):
       if t != null then
         val inst = t.inst
 
-        // Longest-match pruning
-        if matchedHere then
+        var addNext = false
+        inst.op match
+          case InstOp.MATCH =>
+            // copy thread freeing semantics from RE2J, only return true if full match found
+            // in practice, partial matches tracked using t.cap(1)
+            if rune == -1 then
+              t.cap(1) = pos
+              Array.copy(t.cap, 0, matchcap, 0, ncap)
+              matchedHere = true
+              free(runq, j + 1)
+
+          case InstOp.RUNE =>
+            addNext = inst.matchRune(rune)
+
+          case InstOp.RUNE1 =>
+            addNext = rune == inst.runes(0)
+
+          case InstOp.RUNE_ANY =>
+            addNext = true
+
+          case InstOp.RUNE_ANY_NOT_NL =>
+            addNext = rune != '\n'
+
+          case _ =>
+            throw new IllegalStateException(s"bad inst: ${inst.op}")
+
+        if addNext then
+          t = add(inst.out, pos + 1, t.cap, nextq, t)
+
+        if t != null then
           free(t)
-        else
-          var addNext = false
-          inst.op match
-            case InstOp.MATCH =>
-              if rune == -1 && !matchedHere then
-                t.cap(1) = pos
-                Array.copy(t.cap, 0, matchcap, 0, ncap)
-                matchedHere = true
-
-            case InstOp.RUNE =>
-              addNext = inst.matchRune(rune)
-
-            case InstOp.RUNE1 =>
-              addNext = rune == inst.runes(0)
-
-            case InstOp.RUNE_ANY =>
-              addNext = true
-
-            case InstOp.RUNE_ANY_NOT_NL =>
-              addNext = rune != '\n'
-
-            case _ =>
-              throw new IllegalStateException(s"bad inst: ${inst.op}")
-
-          if addNext then
-            t = add(inst.out, pos + 1, t.cap, nextq, t)
-
-          if t != null then
-            free(t)
-            runq.denseThreads(j) = null
+          runq.denseThreads(j) = null
 
       j += 1
 
@@ -203,7 +206,7 @@ class RE2Machine(val prog: Prog):
 
     val _ = add(prog.start, 0, matchcap.clone(), runq, null)
 
-    while !matched && !runq.isEmpty do
+    while !runq.isEmpty do
       val rune =
         if pos < input.length then input.charAt(pos).toInt
         else -1 // EOF
@@ -214,86 +217,86 @@ class RE2Machine(val prog: Prog):
       if pos < input.length then pos += 1
       val tmp = runq; runq = nextq; nextq = tmp
     
-    // println(matchcap.mkString(","))
+    println(matchcap.mkString(","))
     matched
 
-  def stepWithTable(
-    addTable: Array[AddFn],
-    runq: RE2Queue,
-    nextq: RE2Queue,
-    pos: Int,
-    rune: Int,
-  ): Boolean =
-    var matchedHere = false
-    var j = 0
+  // def stepWithTable(
+  //   addTable: Array[AddFn],
+  //   runq: RE2Queue,
+  //   nextq: RE2Queue,
+  //   pos: Int,
+  //   rune: Int,
+  // ): Boolean =
+  //   var matchedHere = false
+  //   var j = 0
 
-    while j < runq.size do
-      var t = runq.denseThreads(j)
-      if t != null then
-        val inst = t.inst
+  //   while j < runq.size do
+  //     var t = runq.denseThreads(j)
+  //     if t != null then
+  //       val inst = t.inst
 
-        // Longest-match pruning
-        if matched && ncap > 0 && matchcap(0) < t.cap(0) then
-          free(t)
-        else
-          var addNext = false
-          // println(s"step at pos=$pos, char=${rune}, inst=${inst}, cap=${t.cap.mkString(",")}")
-          inst.op match
-            case InstOp.MATCH =>
-              // Anchoring checks skipped; assume unanchored for now
-              if ncap > 0 && (!matched || matchcap(1) < pos) then
-                t.cap(1) = pos
-                System.arraycopy(t.cap, 0, matchcap, 0, ncap)
-                // matchedHere = true
+  //       // Longest-match pruning
+  //       if matched && ncap > 0 && matchcap(0) < t.cap(0) then
+  //         free(t)
+  //       else
+  //         var addNext = false
+  //         // println(s"step at pos=$pos, char=${rune}, inst=${inst}, cap=${t.cap.mkString(",")}")
+  //         inst.op match
+  //           case InstOp.MATCH =>
+  //             // Anchoring checks skipped; assume unanchored for now
+  //             if ncap > 0 && (!matched || matchcap(1) < pos) then
+  //               t.cap(1) = pos
+  //               System.arraycopy(t.cap, 0, matchcap, 0, ncap)
+  //               matchedHere = true
 
-            case InstOp.RUNE =>
-              addNext = inst.matchRune(rune)
+  //           case InstOp.RUNE =>
+  //             addNext = inst.matchRune(rune)
 
-            case InstOp.RUNE1 =>
-              addNext = rune == inst.runes(0)
+  //           case InstOp.RUNE1 =>
+  //             addNext = rune == inst.runes(0)
 
-            case InstOp.RUNE_ANY =>
-              addNext = true
+  //           case InstOp.RUNE_ANY =>
+  //             addNext = true
 
-            case InstOp.RUNE_ANY_NOT_NL =>
-              addNext = rune != '\n'
+  //           case InstOp.RUNE_ANY_NOT_NL =>
+  //             addNext = rune != '\n'
 
-            case _ =>
-              throw new IllegalStateException(s"bad inst: ${inst.op}")
+  //           case _ =>
+  //             throw new IllegalStateException(s"bad inst: ${inst.op}")
 
-          if addNext then
-            t = addTable(inst.out)(this, pos + 1, inst.out, t.cap, nextq, t)
+  //         if addNext then
+  //           t = addTable(inst.out)(this, pos + 1, inst.out, t.cap, nextq, t)
 
-          if t != null then
-            free(t)
-            runq.denseThreads(j) = null
+  //         if t != null then
+  //           free(t)
+  //           runq.denseThreads(j) = null
 
-      j += 1
+  //     j += 1
 
-    runq.clear()
-    matchedHere
+  //   runq.clear()
+  //   matchedHere
 
 
-  def matchesWithTable(input: CharSequence, addTable: Array[AddFn]): Boolean =
-    var runq  = q0
-    var nextq = q1
-    var pos   = 0
-    matched   = false
-    java.util.Arrays.fill(matchcap, 0)
+  // def matchesWithTable(input: CharSequence, addTable: Array[AddFn]): Boolean =
+  //   var runq  = q0
+  //   var nextq = q1
+  //   var pos   = 0
+  //   matched   = false
+  //   java.util.Arrays.fill(matchcap, 0)
 
-    // initialise first thread
-    addTable(prog.start)(this, 0, prog.start, matchcap.clone(), runq, null)
+  //   // initialise first thread
+  //   addTable(prog.start)(this, 0, prog.start, matchcap.clone(), runq, null)
 
-    while !matched && !runq.isEmpty do
-      val rune = if pos < input.length then input.charAt(pos).toInt else -1
-      matched = stepWithTable(addTable, runq, nextq, pos, rune)
-      if pos < input.length then pos += 1
-      val tmp = runq; runq = nextq; nextq = tmp
-    // println(matchcap.mkString(" "))
-    matched
+  //   while !matched && !runq.isEmpty do
+  //     val rune = if pos < input.length then input.charAt(pos).toInt else -1
+  //     matched = stepWithTable(addTable, runq, nextq, pos, rune)
+  //     if pos < input.length then pos += 1
+  //     val tmp = runq; runq = nextq; nextq = tmp
+  //   // println(matchcap.mkString(" "))
+  //   matched
 
 @main def testRE2Machine(): Unit =
-  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((a|b)*|(cd)*)*")
+  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((ab)*|(cd)*)*")
   val prog = ProgramCompiler.compileRegexp(nestPattern, nestPatternCaps)
   val machine = RE2Machine(prog)
   println(machine.matches("abababcdcdcdababab"))
