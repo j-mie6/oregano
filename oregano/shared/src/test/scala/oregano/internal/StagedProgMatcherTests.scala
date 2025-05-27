@@ -5,29 +5,13 @@ import org.scalatest.prop.TableDrivenPropertyChecks.*
 import scala.quoted.staging.*
 import oregano.internal.{Pattern, PatternResult, ProgramCompiler, BacktrackingProgMatcher}
 import org.scalatest.SequentialNestedSuiteExecution
+import oregano.internal.StagedMatchers.{stagedProg, stagedProgWithCaps}
 
-
-private inline def stagedMatcherFrom(regex: String): CharSequence => Boolean =
-  given Compiler = Compiler.make(classOf[StagedProgMatcherTests].getClassLoader)
-  run {
-    val PatternResult(pattern, groupCount, _, _) = Pattern.compile(regex)
-    val prog = ProgramCompiler.compileRegexp(pattern, groupCount)
-    BacktrackingProgMatcher.genMatcher(prog)
-  }
-
-private inline def stagedMatcherWithCapsFrom(regex: String): CharSequence => Option[Array[Int]] =
-  given Compiler = Compiler.make(classOf[StagedProgMatcherTests].getClassLoader)
-  run {
-    val PatternResult(pattern, groupCount, _, _) = Pattern.compile(regex)
-    val prog = ProgramCompiler.compileRegexp(pattern, groupCount)
-    BacktrackingProgMatcher.genMatcherWithCaps(prog)
-  }
 
 // need to be in same class, runtime MSP is not multithread safe
-// seems to break every now and then
-class StagedProgMatcherTests extends AnyFlatSpec {
+class StagedProgMatcherTests extends AnyFlatSpec with SequentialNestedSuiteExecution {
 
-  val nestedMatcher = stagedMatcherFrom("(ab)*bc|(def)")
+  val nestedMatcher = stagedProg("(ab)*bc|(def)")
 
   behavior of "StagedMatcher - regex (ab)*bc|(def)"
 
@@ -76,7 +60,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val groupingMatcher = stagedMatcherFrom("(a|b)*c[0-9]")
+  val groupingMatcher = stagedProg("(a|b)*c[0-9]")
 
   behavior of "StagedProgMatcher - regex (a|b)*c[0-9]"
 
@@ -114,7 +98,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
   }
 
 
-  val complexExpressionMatcher = stagedMatcherFrom("((ab)*|[cd]*)e(f|g)[0-9]")
+  val complexExpressionMatcher = stagedProg("((ab)*|[cd]*)e(f|g)[0-9]")
 
   behavior of "StagedProgMatcher - ((ab)*|[cd]*)e(f|g)[0-9]"
 
@@ -157,7 +141,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val heavyBacktrackingMatcher = stagedMatcherFrom("((a|aa)*)b")
+  val heavyBacktrackingMatcher = stagedProg("((a|aa)*)b")
 
   behavior of "StagedProgMatcher - ((a|aa)*)b"
 
@@ -200,7 +184,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val matcherCapsWithSequentialLoops = stagedMatcherWithCapsFrom("((a*)b*)bc|(def)")
+  val matcherCapsWithSequentialLoops = stagedProgWithCaps("((a*)b*)bc|(def)")
 
   behavior of "StagedProgMatcher - matchesWithCaps - ((a*)b*)bc|(def)"
 
@@ -239,7 +223,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val matcherCapsWithNestedAltLoops = stagedMatcherWithCapsFrom("(((a)|b|cd)*)e")
+  val matcherCapsWithNestedAltLoops = stagedProgWithCaps("(((a)|b|cd)*)e")
 
   behavior of "StagedProgMatcher - matchesWithCaps - (((a)|b|cd)*)e"
 

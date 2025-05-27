@@ -4,26 +4,12 @@ import org.scalatest.prop.TableDrivenPropertyChecks.*
 import scala.quoted.staging.*
 import oregano.internal.{Pattern, PatternResult, CPSMatcher}
 import org.scalatest.SequentialNestedSuiteExecution
-
-
-private inline def stagedMatcherFrom(regex: String): CharSequence => Boolean =
-  given Compiler = Compiler.make(classOf[StagedCPSMatcherTests].getClassLoader)
-  run {
-    val PatternResult(pattern, _, _, _) = Pattern.compile(regex)
-    CPSMatcher.genMatcherPattern(pattern)
-  }
-
-private inline def stagedMatcherWithCapsFrom(regex: String): CharSequence => Option[Array[Int]] =
-  given Compiler = Compiler.make(classOf[StagedCPSMatcherTests].getClassLoader)
-  run {
-    val PatternResult(pattern, groupCount, _, _) = Pattern.compile(regex)
-    CPSMatcher.genMatcherPatternWithCaps(pattern, groupCount)
-  }
+import oregano.internal.StagedMatchers.{stagedCPS, stagedCPSWithCaps}
 
 // need to be in same class, runtime MSP is not multithread safe
-class StagedCPSMatcherTests extends AnyFlatSpec {
+class StagedCPSMatcherTests extends AnyFlatSpec with SequentialNestedSuiteExecution {
 
-  val nestedMatcher = stagedMatcherFrom("((a*)b*)*bc|(def)")
+  val nestedMatcher = stagedCPS("((a*)b*)*bc|(def)")
 
   behavior of "StagedCPSMatcher - regex ((a*)b*)*bc|(def)"
 
@@ -74,7 +60,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val groupingMatcher = stagedMatcherFrom("(a|b)*c[0-9]")
+  val groupingMatcher = stagedCPS("(a|b)*c[0-9]")
 
   behavior of "StagedCPSMatcher - regex (a|b)*c[0-9]"
 
@@ -112,7 +98,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
   }
 
 
-  val complexExpressionMatcher = stagedMatcherFrom("((ab)*|[cd]*)e(f|g)[0-9]")
+  val complexExpressionMatcher = stagedCPS("((ab)*|[cd]*)e(f|g)[0-9]")
 
   behavior of "StagedCPSMatcher - ((ab)*|[cd]*)e(f|g)[0-9]"
 
@@ -155,7 +141,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val heavyBacktrackingMatcher = stagedMatcherFrom("((a|aa)*)b")
+  val heavyBacktrackingMatcher = stagedCPS("((a|aa)*)b")
 
   behavior of "StagedCPSMatcher - ((a|aa)*)b"
 
@@ -199,7 +185,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
   }
 
 
-  val matcherCapsWithNestedLoops = stagedMatcherWithCapsFrom("((a*)b*)*bc|(def)")
+  val matcherCapsWithNestedLoops = stagedCPSWithCaps("((a*)b*)*bc|(def)")
 
   behavior of "StagedCPSMatcher - matchesWithCaps - ((a*)b*)*bc|(def)"
 
@@ -239,7 +225,7 @@ class StagedCPSMatcherTests extends AnyFlatSpec {
     }
   }
 
-  val matcherCapsWithNestedAltLoops = stagedMatcherWithCapsFrom("(((a)|b|cd)*)e")
+  val matcherCapsWithNestedAltLoops = stagedCPSWithCaps("(((a)|b|cd)*)e")
 
   behavior of "StagedCPSMatcher - matchesWithCaps - (((a)|b|cd)*)e"
 
