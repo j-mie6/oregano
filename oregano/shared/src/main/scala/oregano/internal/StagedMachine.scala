@@ -1,9 +1,10 @@
 package oregano.internal
 
+import scala.collection.mutable.Set
 import scala.quoted.*
 
-type StepFn = (RE2Machine, RE2Queue, RE2Queue, Int, Int) => Boolean
-type AddFn = (RE2Machine, Int, Int, Array[Int], RE2Queue, RE2Thread) => RE2Thread
+// type StepFn = (RE2Machine, RE2Queue, RE2Queue, Int, Int) => Boolean
+// type AddFn = (RE2Machine, Int, Int, Array[Int], RE2Queue, RE2Thread) => RE2Thread
 
 object StagedMachine:
   // def buildMachineTable(prog: Prog)(using Quotes): Expr[Array[StepFn]] =
@@ -147,8 +148,15 @@ object StagedMachine:
     cap: Expr[Array[Int]],
     pos: Expr[Int],
     q: Expr[RE2Queue],
-    t: Expr[RE2Thread]
+    t: Expr[RE2Thread],
+    seen: Set[Int] = Set[Int](),
   )(using Quotes): Expr[RE2Thread] =
+    if seen.contains(pc) then
+      // println(s"Already seen $pc")
+      return t
+    // println(s"Generating inline add for $pc")
+    seen.add(pc)
+    
     val pcExpr = Expr(pc)
 
     inst.op match
@@ -156,17 +164,17 @@ object StagedMachine:
         t
 
       case InstOp.NOP =>
-        generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t)
+        generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
 
       case InstOp.ALT | InstOp.LOOP =>
-        val addLeft  = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t)
-        val addRight = generateInlineAdd(inst.arg, prog.getInst(inst.arg), prog, m, cap, pos, q, addLeft)
+        val addLeft  = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
+        val addRight = generateInlineAdd(inst.arg, prog.getInst(inst.arg), prog, m, cap, pos, q, addLeft, seen)
         addRight
 
       case InstOp.CAPTURE =>
         if inst.arg < prog.numCap then
           val slotExpr = Expr(inst.arg)
-          val innerAdd = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{ null })
+          val innerAdd = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{ null }, seen)
           '{
             val old = $cap($slotExpr)
             $cap($slotExpr) = $pos
@@ -175,7 +183,7 @@ object StagedMachine:
             $t
           }
         else
-          generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t)
+          generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
 
       case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL =>
         // '{
@@ -189,20 +197,20 @@ object StagedMachine:
         //     null
         // }
         '{
-          if $q.contains($pcExpr) then $t
-          else
-            val d = $q.add($pcExpr)
-            val thread =
-              if $t == null then $m.alloc(${ Expr(inst) })
-              else
-                val reused = $t // required because cannot reassign a param, compiler conservatively assumes val
-                reused.inst = ${ Expr(inst) }
-                reused
+          // if $q.contains($pcExpr) then $t
+          // else
+          val d = $q.add($pcExpr)
+          val thread =
+            if $t == null then $m.alloc($m.prog.insts($pcExpr))
+            else
+              val reused = $t // required because cannot reassign a param, compiler conservatively assumes val
+              reused.inst = $m.prog.insts($pcExpr)
+              reused
 
-            if $m.ncap > 0 && (thread.cap ne $cap) then
-              System.arraycopy($cap, 0, thread.cap, 0, $m.ncap)
-            $q.denseThreads(d) = thread
-            null
+          if $m.ncap > 0 && (thread.cap ne $cap) then
+            System.arraycopy($cap, 0, thread.cap, 0, $m.ncap)
+          $q.denseThreads(d) = thread
+          null
         }
       case _ =>
         quotes.reflect.report.errorAndAbort(s"Unsupported op in inline add: ${inst.op}")
@@ -218,16 +226,17 @@ object StagedMachine:
       rune: Expr[Int],
       // addDispatcher: Expr[(Int, Array[Int], Int, RE2Queue, RE2Thread) => RE2Thread]
     )(using Quotes): List[CaseDef] =
-      val requiredInstOps = Set(
-        InstOp.MATCH,
-        InstOp.RUNE,
-        InstOp.RUNE1,
-        InstOp.RUNE_ANY,
-        InstOp.RUNE_ANY_NOT_NL
-      )
-      (0 until prog.numInst).toList.filter(
-        pc => requiredInstOps.contains(prog.getInst(pc).op)
-      ).map { pc =>
+      // val requiredInstOps = Set(
+      //   InstOp.MATCH,
+      //   InstOp.RUNE,
+      //   InstOp.RUNE1,
+      //   InstOp.RUNE_ANY,
+      //   InstOp.RUNE_ANY_NOT_NL
+      // )
+      // filter(
+      //   pc => requiredInstOps.contains(prog.getInst(pc).op)
+
+      (0 until prog.numInst).toList.map { pc =>
         val inst = prog.getInst(pc)
         val body = generateStagedStepForPc(
           pc,
@@ -242,6 +251,8 @@ object StagedMachine:
         )
         CaseDef(Literal(IntConstant(pc)), None, body.asTerm)
       }
+    
+    val progStartExpr = Expr(prog.start)
       
     '{
       (m: RE2Machine, input: CharSequence) =>
@@ -249,38 +260,54 @@ object StagedMachine:
         var nextq = m.q1
         var pos = 0
         m.matched = false
-        println(s"Poolsize: ${ m.poolSize }")
         m.matchcap.indices.foreach(i => m.matchcap(i) = 0)
 
-        // val _ = ${
-        //   generateInlineAdd(
-        //     prog.start,
-        //     prog.getInst(prog.start),
-        //     prog,
-        //     '{ m },
-        //     '{ m.matchcap.clone() },
-        //     '{ 0 },
-        //     '{ runq },
-        //     '{ null }
-        //   )
-        // }
-        // val addDispatcher = (pc: Int, cap: Array[Int], pos: Int, q: RE2Queue, t: RE2Thread) => 
-        //   ${ generateStagedAddDispatcher(prog, 'pc, 'm, 'cap, 'pos, 'q, 't) }
+        val clone = m.matchcap.clone()
 
         val _ = ${
-          generateStagedAddDispatcher(
+          generateInlineAdd(
+            prog.start,
+            prog.getInst(prog.start),
             prog,
-            Expr(prog.start),
-            'm,
-            '{ m.matchcap.clone() },
+            '{ m },
+            '{ clone },
             '{ 0 },
-            'runq,
-            'null
+            '{ runq },
+            '{ null }
           )
         }
+        // val addDispatcher = (pc: Int, cap: Array[Int], pos: Int, q: RE2Queue, t: RE2Thread) => 
+        //   ${ generateStagedAddDispatcher(prog, 'pc, 'm, 'cap, 'pos, 'q, 't) }
+        // val - = addDispatcher(
+        //   $progStartExpr,
+        //   m.matchcap.clone(),
+        //   0,
+        //   runq,
+        //   null
+        // )
+
+        // val _ = ${
+        //   generateStagedAddDispatcher(
+        //     prog,
+        //     Expr(prog.start),
+        //     'm,
+        //     '{ m.matchcap.clone() },
+        //     '{ 0 },
+        //     'runq,
+        //     'null
+        //   )
+        // }
+
+        // val _ = m.add(
+        //   $progStartExpr,
+        //   0,
+        //   m.matchcap.clone(),
+        //   runq,
+        //   null
+        // )
 
 
-        while !m.matched && !runq.isEmpty do
+        while !runq.isEmpty do
           var i = 0
           while i < runq.size do
             val pc = runq.densePcs(i)
@@ -304,10 +331,35 @@ object StagedMachine:
           val tmp = runq; runq = nextq; nextq = tmp
           if pos < input.length then pos += 1
 
-        println(m.matchcap.mkString(" "))
-        println(s"poolsize: ${m.poolSize}")
+        // println(m.matchcap.mkString(" "))
+        // println(s"poolsize: ${m.poolSize}")
         m.matched
     }
+
+  def generateStepHandlers(prog: Prog)(using Quotes): Expr[Array[(Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit]] =
+    import quotes.reflect.*
+
+    val handlerExprs: Seq[Expr[(Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit]] =
+      (0 until prog.numInst).toList.map { pc =>
+        val inst = prog.getInst(pc)
+        '{
+          (rune: Int, pos: Int, runq: RE2Queue, nextq: RE2Queue, i: Int, m: RE2Machine) =>
+            ${
+              generateStagedStepForPc(
+                pc = pc,
+                inst = inst,
+                prog = prog,
+                m = 'm,
+                runq = 'runq,
+                nextq = 'nextq,
+                pos = 'pos,
+                rune = 'rune
+              )
+            }
+        }
+      }
+
+    '{ Array(${ Varargs(handlerExprs) }*) }
 
 
   def generateStagedStepForPc(
@@ -329,9 +381,8 @@ object StagedMachine:
         '{
           val t = $runq.getThread($pcExpr)
           if $rune == -1 then // should be some EOF, need to wrap inputs
-            if $m.ncap > 0 && (!$m.matched || $m.matchcap(1) < $pos) then
-              t.cap(1) = $pos
-              System.arraycopy(t.cap, 0, $m.matchcap, 0, $m.ncap)
+            t.cap(1) = $pos
+            Array.copy(t.cap, 0, $m.matchcap, 0, $m.ncap)
             $m.matched = true
           if t != null then
             $m.free(t)
@@ -346,25 +397,13 @@ object StagedMachine:
           if t != null then
             val matched = ${ runeCheck }($rune)
             if matched then
-              // t = $add($m, $pos + 1, $outPcExpr, t.cap, $nextq, t)
-              // t = $m.add($outPcExpr, $pos + 1, t.cap, $nextq, t)
-              // val t2 = ${
-              //   generateInlineAdd(
-              //     inst.out,
-              //     prog.getInst(inst.out),
-              //     prog,
-              //     m,
-              //     '{ t.cap },
-              //     '{ $pos + 1 },
-              //     nextq,
-              //     '{ t }
-              //   )
-              // }
-              // val t2 = $addDispatcher($instOutExpr, t.cap, $pos + 1, $nextq, t)
+              // uncomment for recursive add
+              // t = $m.add($instOutExpr, $pos + 1, t.cap, $nextq, t)
               t = ${
-                generateStagedAddDispatcher(
+                generateInlineAdd(
+                  inst.out,
+                  prog.getInst(inst.out),
                   prog,
-                  Expr(inst.out),
                   m,
                   '{ t.cap },
                   '{ $pos + 1 },
@@ -372,9 +411,19 @@ object StagedMachine:
                   '{ t }
                 )
               }
-            // if t != null then
-            //   $m.free(t)
-            //   $runq.clearThread($pcExpr)
+              // t = $addDispatcher($instOutExpr, t.cap, $pos + 1, $nextq, t)
+              // code explodes if we inline all adds + steps!
+              // t = ${
+              //   generateStagedAddDispatcher(
+              //     prog,
+              //     Expr(inst.out),
+              //     m,
+              //     '{ t.cap },
+              //     '{ $pos + 1 },
+              //     nextq,
+              //     '{ t }
+              //   )
+              // }
           if t != null then
             $m.free(t)
             $runq.clearThread($pcExpr)
@@ -397,71 +446,9 @@ object StagedMachine:
     // cannot filter here: everything needs an add
     val cases: List[CaseDef] = (0 until prog.numInst).map { pc =>
       val inst = prog.getInst(pc)
-      val body = generateAddBody(pc, inst, prog, m, cap, pos, q, t)
+      val body = generateInlineAdd(pc, inst, prog, m, cap, pos, q, t)
       CaseDef(Literal(IntConstant(pc)), None, body.asTerm)
     }.toList
-    println("Generating add dispatcher cases:")
-    cases.foreach(cd => println(cd.pattern.show))
+    // cases.foreach(cd => println(cd.pattern.show))
     Match(pc.asTerm, cases).asExprOf[RE2Thread]
 
-
-def generateAddBody(
-    pc: Int,
-    inst: Inst,
-    prog: Prog,
-    m: Expr[RE2Machine],
-    cap: Expr[Array[Int]],
-    pos: Expr[Int],
-    q: Expr[RE2Queue],
-    t: Expr[RE2Thread]
-  )(using Quotes): Expr[RE2Thread] =
-
-    val pcExpr = Expr(pc)
-
-    inst.op match
-      case InstOp.FAIL =>
-        t
-
-      case InstOp.NOP =>
-        generateAddBody(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t)
-
-      case InstOp.ALT | InstOp.LOOP =>
-        val addLeft  = generateAddBody(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t)
-        val addRight = generateAddBody(inst.arg, prog.getInst(inst.arg), prog, m, cap, pos, q, addLeft)
-        addRight
-
-      case InstOp.CAPTURE =>
-        if inst.arg < prog.numCap then
-          val slotExpr = Expr(inst.arg)
-          val innerAdd = generateAddBody(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{ null })
-          '{
-            val old = $cap($slotExpr)
-            $cap($slotExpr) = $pos
-            val _ = $innerAdd
-            $cap($slotExpr) = old
-            $t
-          }
-        else
-          generateAddBody(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t)
-
-      case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL =>
-        val instExpr = Expr(inst)
-        '{
-          if $q.contains($pcExpr) then $t
-          else
-            // below is just for captures: could opportunistically remove and return null
-            val d = $q.add($pcExpr)
-            val thread =
-              if $t == null then $m.alloc($instExpr)
-              else
-                val reused = $t
-                reused.inst = $instExpr
-                reused
-            if $m.ncap > 0 && (thread.cap ne $cap) then
-              System.arraycopy($cap, 0, thread.cap, 0, $m.ncap)
-            $q.denseThreads(d) = thread
-            null
-        }
-
-      case _ =>
-        quotes.reflect.report.errorAndAbort(s"Unsupported op in inline add: ${inst.op}")
