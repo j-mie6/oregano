@@ -9,10 +9,8 @@ import scala.quoted.*
 
 abstract class Regex[Match] {
   def matches(input: CharSequence): Boolean
-  // def matchesRuntimeBacktrack(input: CharSequence): Boolean
-  // def matchesRuntimeLinear(input: CharSequence): Boolean
+  def matchesWithCaps(input: CharSequence): Option[Array[Int]]
   def matchesLinear(input: CharSequence): Boolean
-  def matchesBacktrack(input: CharSequence): Boolean
   def unapplySeq(input: CharSequence): Option[Match]
 }
 
@@ -24,10 +22,8 @@ object Regex {
     private val pattern = patternResult.pattern
     private val numGroups = patternResult.groupCount
     private val prog = internal.ProgramCompiler.compileRegexp(pattern, numGroups)
-    // def matches(input: CharSequence): Boolean = compiled.matches(input)
     def matches(input: CharSequence): Boolean = compiled.matches(input)
-    // def matchesRuntimeBacktrack(input: CharSequence): Boolean = ???
-    // def matchesRuntimeLinear(input: CharSequence): Boolean = ???
+    def matchesWithCaps(input: CharSequence): Option[Array[Int]] = ???
     def matchesLinear(input: CharSequence): Boolean = ???
     def matchesBacktrack(input: CharSequence): Boolean = internal.BacktrackingProgMatcher.matches(prog, input )
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
@@ -45,6 +41,7 @@ private def isInlineable(regExpr: Expr[String])(using Quotes): Expr[Regex[?]] = 
       internal.compileMacro(s)
     case _ =>
       // fallback to runtime compilation
+      println(s"Runtime regex")
       '{ Regex.runtime($regExpr) }
   }
 }
