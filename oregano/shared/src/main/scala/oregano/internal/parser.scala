@@ -26,7 +26,7 @@ private object parsers {
     // technically, they can be empty on either side of this... we need an Epsilon
     private lazy val expr: Parsley[Regex] = chain.right1(term)(Alt from '|')
     private lazy val term = Cat(some(chain.postfix(atom)(postfixOps)))
-    private lazy val atom = nonCapture | capture | lit | (Dot from '.') | cls
+    private lazy val atom = nonCapture | capture | lit | predefinedEsc | cls
     private lazy val nonCapture = atomic(string("(?:")) ~> expr <~ ')' map NonCapture.apply
     private lazy val capture = '(' ~> expr <~ ')' map Capture.apply
     private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
@@ -79,6 +79,43 @@ private object parsers {
         Class(clsSet)
     }
     lazy val postfixOps = '*' #> Rep0.apply <|> '+' #> Rep1.apply
+    lazy val predefinedEsc: Parsley[Regex] = atomic('\\' ~> predefined)
+    lazy val predefined = choice(
+        'd'.as(Class(Diet.fromRange(Range('0'.toInt, '9'.toInt)))),
+        'D'.as(Class(Regex.AllSet -- Diet.fromRange(Range('0'.toInt, '9'.toInt)))),
+
+        'w'.as {
+            val chars = Diet.fromRange(Range('a'.toInt, 'z'.toInt)) |
+                        Diet.fromRange(Range('A'.toInt, 'Z'.toInt)) |
+                        Diet.fromRange(Range('0'.toInt, '9'.toInt)) |
+                        Diet.one('_'.toInt)
+            Class(chars)
+        },
+        'W'.as {
+            val chars = Diet.fromRange(Range('a'.toInt, 'z'.toInt)) |
+                        Diet.fromRange(Range('A'.toInt, 'Z'.toInt)) |
+                        Diet.fromRange(Range('0'.toInt, '9'.toInt)) |
+                        Diet.one('_'.toInt)
+            Class(Regex.AllSet -- chars)
+        },
+
+        's'.as {
+            Class(
+                Diet.one(' '.toInt) | Diet.one('\t'.toInt) | Diet.one('\n'.toInt) |
+                Diet.one('\u000B'.toInt) | Diet.one('\r'.toInt) | Diet.one('\f'.toInt)
+            )
+        },
+        'S'.as {
+            val spaceSet = Diet.one(' '.toInt) | Diet.one('\t'.toInt) | Diet.one('\n'.toInt) | 
+                Diet.one('\u000B'.toInt) | Diet.one('\r'.toInt) | Diet.one('\f'.toInt)
+            Class(Regex.AllSet -- spaceSet)
+        },
+
+        '.'.as {
+            Class(Regex.AllSet -- Diet.one('\n'.toInt)) // any rune except newline, can change with flag so may not be best way of handling but works in absence
+        }
+    )
+
 
     // need to make these atomic in general
     private given Conversion[String, Parsley[String]] = str => atomic(string(str))
