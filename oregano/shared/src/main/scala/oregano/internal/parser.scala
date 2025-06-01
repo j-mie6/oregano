@@ -26,7 +26,7 @@ private object parsers {
     // technically, they can be empty on either side of this... we need an Epsilon
     private lazy val expr: Parsley[Regex] = chain.right1(term)(Alt from '|')
     private lazy val term = Cat(some(chain.postfix(atom)(postfixOps)))
-    private lazy val atom = nonCapture | capture | lit | predefinedEsc | cls
+    private lazy val atom = nonCapture | capture | lit | (Dot from '.') | predefinedEsc | cls
     private lazy val nonCapture = atomic(string("(?:")) ~> expr <~ ')' map NonCapture.apply
     private lazy val capture = '(' ~> expr <~ ')' map Capture.apply
     private lazy val lit = Lit(noneOf(keyChars).map(_.toInt) | charEsc)
@@ -53,7 +53,7 @@ private object parsers {
         val numeric = 'x' ~> hexCodeEscX | '0' ~> octCode | 'u' ~> hexFixedEscU
         // `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
         val control = 'c' ~> empty
-        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b).toList.map(_ as _)*)
+        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b, '.' -> '.'.toInt).toList.map(_ as _)*)
         atomic('\\' ~> (single | numeric | control | '\\'.map(_.toInt)))
     }
     private lazy val setEsc: Parsley[Diet[Int]] = empty
@@ -110,12 +110,7 @@ private object parsers {
                 Diet.one('\u000B'.toInt) | Diet.one('\r'.toInt) | Diet.one('\f'.toInt)
             Class(Regex.AllSet -- spaceSet)
         },
-
-        '.'.as {
-            Class(Regex.AllSet -- Diet.one('\n'.toInt)) // any rune except newline, can change with flag so may not be best way of handling but works in absence
-        }
     )
-
 
     // need to make these atomic in general
     private given Conversion[String, Parsley[String]] = str => atomic(string(str))

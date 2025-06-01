@@ -30,11 +30,13 @@ sealed trait Pattern {
 final case class PatternResult(
   pattern: Pattern,
   groupCount: Int,
-  stageable: Boolean,
+  flatControlFlow: Boolean,
+  numReps: Int
 )
 
 class PatternBuilder {
   var nextGroup: Int = 1 // note that 1 is reserved for the whole match, as with other engines
+  var numReps = 0 // initially used for caching nested Rep0 loops safely: TODO: doesn't work and isn't neccessary, delete!
 
   def compile(regex: Regex): Pattern = regex match {
     case Regex.Lit(c) => 
@@ -59,7 +61,17 @@ class PatternBuilder {
 
     case Regex.Rep0(r) =>
       val p = compile(r)
-      Pattern.Rep0(p)
+      val idx = numReps
+      numReps += 1
+      Pattern.Rep0(p, idx)
+
+    // Given we use a shared `p`, capture indicies are propogated safely so I believe this to be safe
+    // That being said, not doing this could yield a more terse Prog, but I don't have time
+    case Regex.Rep1(r) =>
+      val p = compile(r)
+      val idx = numReps
+      numReps += 1
+      Pattern.Cat(List(p, Pattern.Rep0(p, idx)))
 
     case Regex.Capture(r) =>
       val groupId = nextGroup
@@ -69,6 +81,9 @@ class PatternBuilder {
 
     case Regex.NonCapture(r) => compile(r)
 
+    case Regex.Dot =>
+      Pattern.Class(Regex.AllSet -- Diet.one('\n'.toInt)) // Dot matches any character except newline, there is a flag to change this
+
     case _ =>
       throw IllegalArgumentException(s"Unsupported regex: $regex")
   }
@@ -76,8 +91,9 @@ class PatternBuilder {
   def build(regex: Regex): PatternResult = 
     val pattern = compile(regex)
     val groupCount = nextGroup
-    val stageable = Pattern.checkStageable(pattern)
-    PatternResult(pattern, groupCount, stageable)
+    val stageable = Pattern.checkFlatControlFlow(pattern)
+    val numReps = this.numReps + 1
+    PatternResult(pattern, groupCount, stageable, numReps)
 }
 
 object Pattern {
@@ -85,14 +101,14 @@ object Pattern {
   final case class Cat(patterns: List[Pattern]) extends Pattern 
   final case class Alt(left: Pattern, right: Pattern) extends Pattern 
   final case class Class(diet: Diet[Int]) extends Pattern
-  final case class Rep0(pat: Pattern) extends Pattern
+  final case class Rep0(pat: Pattern, idx: Int) extends Pattern
   final case class Capture(groupIdx: Int, pat: Pattern) extends Pattern
 
   def lit(c: Int): Pattern = Lit(c)
   def concat(ps: Pattern*): Pattern = Cat(ps.toList)
   def alt(p1: Pattern, p2: Pattern): Pattern = Alt(p1, p2)
   def charClass(diet: Diet[Int]): Pattern = Class(diet)
-  def rep0(pat: Pattern): Pattern = Rep0(pat)
+  def rep0(pat: Pattern): Pattern = Rep0(pat, 0) // idx is not used here
 
   // Do we need this? could we not use Regex.Lit, Regex.Cat, Regex.Alt etc directly?
   // Might be worth having when optimising, for methods etc. but not sure
@@ -136,15 +152,15 @@ object Pattern {
 
   def checkForNestedLoop(pat: Pattern, seenLoop: Boolean = false): Boolean = 
     pat match {
-      case Pattern.Rep0(_) if seenLoop => true
-      case Pattern.Rep0(p) => checkForNestedLoop(p, true)
+      case Pattern.Rep0(_, _) if seenLoop => true
+      case Pattern.Rep0(p, _) => checkForNestedLoop(p, true)
       case Pattern.Alt(left, right) => checkForNestedLoop(left, seenLoop) || checkForNestedLoop(right, seenLoop)
       case Pattern.Cat(ps) => ps.exists(p => checkForNestedLoop(p, seenLoop))
       case Pattern.Capture(_, p) => checkForNestedLoop(p, seenLoop)
       case _ => false
     }
 
-  def checkStageable(pat: Pattern): Boolean =
+  def checkFlatControlFlow(pat: Pattern): Boolean =
     // for now, protect against nested loops
     !checkForNestedLoop(pat)
 
@@ -168,9 +184,9 @@ object Pattern {
 
 
   // check if nested loop detection works
-  val PatternResult(unnestedLoop, _, _) = Pattern.compile("ab*c*")
-  println(Pattern.checkStageable(unnestedLoop)) // should be false
+  val PatternResult(unnestedLoop, _, _, _) = Pattern.compile("ab*c*")
+  println(Pattern.checkFlatControlFlow(unnestedLoop)) // should be false
 
-  val PatternResult(nestedLoop, _, _) = Pattern.compile("a(b*)*c*")
+  val PatternResult(nestedLoop, _, _, _) = Pattern.compile("a(b*)*c*")
   println(nestedLoop)
-  println(Pattern.checkStageable(nestedLoop))
+  println(Pattern.checkFlatControlFlow(nestedLoop))
