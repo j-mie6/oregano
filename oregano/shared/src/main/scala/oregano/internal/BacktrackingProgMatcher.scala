@@ -3,179 +3,300 @@ package oregano.internal
 import scala.quoted.*
 
 object BacktrackingProgMatcher:
-  def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
-    def compile(
-      pc: Int,
-      end: Int,
-      input: Expr[CharSequence],
-      pos: Expr[Int],
-    ): Expr[Int] = pc match
-      case _ if pc == end =>
-        pos
+//   def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
+//     def compile(
+//       pc: Int,
+//       end: Int,
+//       input: Expr[CharSequence],
+//       pos: Expr[Int],
+//     ): Expr[Int] = pc match
+//       case _ if pc == end =>
+//         pos
 
-      case _ =>
-        val inst = prog.getInst(pc)
-        inst.op match
+//       case _ =>
+//         val inst = prog.getInst(pc)
+//         inst.op match
 
-          case InstOp.MATCH =>
+//           case InstOp.MATCH =>
+//             '{
+//               if $pos == $input.length then
+//                 $pos
+//               else
+//                 -1
+//             }
+
+//           case InstOp.FAIL =>
+//             '{ -1 }
+
+//           case InstOp.ALT =>
+//             val left  = compile(inst.out, end, input, pos)
+//             val right = compile(inst.arg, end, input, pos)
+//             '{
+//               val lp = $left
+//               if lp >= 0 then lp
+//               else
+//                 $right
+//             }
+
+//           case InstOp.RUNE | InstOp.RUNE1 =>
+//             val runeCheck = inst.matchRuneExpr
+//             val nextPos = '{ $pos + 1 }
+//             val succ = compile(inst.out, end, input, nextPos)
+//             '{
+//               if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
+//                 then 
+//                   $succ
+//                 else -1
+//             }
+
+//           case InstOp.LOOP =>
+//             val body = (p: Expr[Int]) => compile(inst.out, pc,  input, p)
+//             val exit = (p: Expr[Int]) => compile(inst.arg, end, input, p)
+//             '{
+//               def loop(pos: Int): Int =
+//                 val next   = ${ body('{pos}) }
+//                 // if no match or zero-length, restore and exit
+//                 if next == -1 || next == pos then
+//                   ${ exit('{pos}) }
+//                 else
+//                   val attempt = loop(next)
+//                   if attempt >= pos then attempt
+//                   else
+//                     ${ exit('{pos}) }
+//               loop($pos)
+//             }
+
+//           case InstOp.CAPTURE =>
+//             val nextExp = compile(inst.out, end, input, pos)
+//             '{
+//               val res     = $nextExp
+//               if (res >= 0) then res else -1
+//             }
+
+//           case _ =>
+//             quotes.reflect.report.errorAndAbort(s"Unsupported op: ${inst.op}")
+
+//     '{
+//       (input: CharSequence) =>
+//         val result = ${ compile(prog.start, prog.numInst, 'input, '{0}) }
+//         result >= 0
+//     }
+
+//   def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
+//     def compile(
+//       pc: Int,
+//       end: Int,
+//       input: Expr[CharSequence],
+//       pos: Expr[Int],
+//       capCopy: Expr[Array[Int]],
+//       cap: Expr[Array[Int]]
+//     ): Expr[Int] = pc match
+//       case _ if pc == end =>
+//         pos
+
+//       case _ =>
+//         val inst = prog.getInst(pc)
+//         inst.op match
+
+//           case InstOp.MATCH =>
+//             '{
+
+//               if $pos == $input.length then
+//                 $cap(1) = $pos
+//                 $pos
+//               else
+//                 -1
+//             }
+
+//           case InstOp.FAIL =>
+//             '{ -1 }
+
+//           case InstOp.ALT =>
+//             val left  = compile(inst.out, end, input, pos, capCopy, cap)
+//             val right = compile(inst.arg, end, input, pos, capCopy, cap)
+//             '{
+//               val lp = $left
+//               if lp >= 0 then lp
+//               else
+//                 $right
+//             }
+
+//           case InstOp.RUNE | InstOp.RUNE1 =>
+//             val runeCheck = inst.matchRuneExpr
+//             val nextPos = '{ $pos + 1 }
+//             val succ = compile(inst.out, end, input, nextPos, capCopy, cap)
+//             '{
+//               if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
+//                 then $succ
+//                 else -1
+//             }
+
+//           case InstOp.LOOP =>
+//             val body = (p: Expr[Int]) => compile(inst.out, pc,  input, p, capCopy, cap)
+//             val exit = (p: Expr[Int]) => compile(inst.arg, end, input, p, capCopy, cap)
+//             '{
+//               def loop(pos: Int): Int =
+//                 val next = ${ body('{pos}) }
+//                 // if no match or zero-length, restore and exit
+//                 if next == -1 || next == pos then
+//                   ${ exit('{pos}) }
+//                 else
+//                   val attempt = loop(next)
+//                   if attempt >= pos then attempt
+//                   else
+//                     ${ exit('{pos}) }
+
+//               loop($pos)
+//             }
+
+//           case InstOp.CAPTURE =>
+//             val slot = inst.arg
+//             val nextExp = compile(inst.out, end, input, pos, capCopy, cap)
+//             '{
+//               val oldVal = $cap(${Expr(slot)})
+//               val curPos = $pos
+//               val res = $nextExp
+
+//               if (res >= 0) then
+//                 $cap(${Expr(slot)}) = curPos
+//                 res
+//               else
+//                 $cap(${Expr(slot)}) = oldVal
+//                 -1
+//             }
+
+//           case _ =>
+//             quotes.reflect.report.errorAndAbort(s"Unsupported op: ${inst.op}")
+
+//     '{
+//       (input: CharSequence) =>
+//         val capCopy = new Array[Int](${Expr(prog.numCap)})
+//         val groups = Array.fill(${Expr(prog.numCap)})(-1)
+//         groups(0) = 0
+//         val result = ${ compile(prog.start, prog.numInst, 'input, '{0}, 'capCopy, 'groups) }
+
+//         if result >= 0 then Some(groups) else None
+//     }
+
+  private def compileInst(
+    prog: Prog,
+    pc: Int,
+    end: Int,
+    input: Expr[CharSequence],
+    pos: Expr[Int],
+    withCaps: Boolean,
+    capExpr: Expr[Array[Int]]
+  )(using Quotes): Expr[Int] =
+    import quotes.reflect.*
+
+    if pc == end then
+      pos
+    else
+      val inst = prog.getInst(pc)
+      inst.op match
+
+        case InstOp.MATCH =>
+          if (!withCaps) then
+            '{
+              if $pos == $input.length then $pos else -1
+            }
+          else
             '{
               if $pos == $input.length then
+                $capExpr(1) = $pos
                 $pos
               else
                 -1
             }
 
-          case InstOp.FAIL =>
-            '{ -1 }
+        case InstOp.FAIL =>
+          '{ -1 }
 
-          case InstOp.ALT =>
-            val left  = compile(inst.out, end, input, pos)
-            val right = compile(inst.arg, end, input, pos)
-            '{
-              val lp = $left
-              if lp >= 0 then lp
+        case InstOp.ALT =>
+          val leftExpr  = compileInst(prog, inst.out, end, input, pos, withCaps, capExpr)
+          val rightExpr = compileInst(prog, inst.arg, end, input, pos, withCaps, capExpr)
+          '{
+            val lp = $leftExpr
+            if lp >= 0 then lp else $rightExpr
+          }
+
+        case InstOp.RUNE | InstOp.RUNE1 =>
+          val runeCheck = inst.matchRuneExpr
+          val nextPos   = '{ $pos + 1 }
+          val succExpr  = compileInst(prog, inst.out, end, input, nextPos, withCaps, capExpr)
+          '{
+            if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt)) then
+              $succExpr
+            else
+              -1
+          }
+
+        case InstOp.LOOP =>
+          '{
+            def loop(posLoop: Int): Int =
+              val nextVal = ${
+                compileInst(prog, inst.out, pc, input, '{ posLoop }, withCaps, capExpr)
+              }
+              if (nextVal == -1 || nextVal == posLoop) then
+                ${
+                  compileInst(prog, inst.arg, end, input, '{ posLoop }, withCaps, capExpr)
+                }
               else
-                $right
-            }
+                val attempt = loop(nextVal)
+                if (attempt >= posLoop) then attempt
+                else ${
+                  compileInst(prog, inst.arg, end, input, '{ posLoop }, withCaps, capExpr)
+                }
 
-          case InstOp.RUNE | InstOp.RUNE1 =>
-            val runeCheck = inst.matchRuneExpr
-            val nextPos = '{ $pos + 1 }
-            val succ = compile(inst.out, end, input, nextPos)
-            '{
-              if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
-                then 
-                  $succ
-                else -1
-            }
+            loop($pos)
+          }
 
-          case InstOp.LOOP =>
-            val body = (p: Expr[Int]) => compile(inst.out, pc,  input, p)
-            val exit = (p: Expr[Int]) => compile(inst.arg, end, input, p)
-            '{
-              def loop(pos: Int): Int =
-                val next   = ${ body('{pos}) }
-                // if no match or zero-length, restore and exit
-                if next == -1 || next == pos then
-                  ${ exit('{pos}) }
-                else
-                  val attempt = loop(next)
-                  if attempt >= pos then attempt
-                  else
-                    ${ exit('{pos}) }
-              loop($pos)
-            }
+        case InstOp.CAPTURE =>
+          val slot    = inst.arg
+          val nextExp = compileInst(prog, inst.out, end, input, pos, withCaps, capExpr)
 
-          case InstOp.CAPTURE =>
-            val nextExp = compile(inst.out, end, input, pos)
+          if (!withCaps) then
             '{
-              val res     = $nextExp
+              val res = $nextExp
               if (res >= 0) then res else -1
             }
+          else
+            val slotIdx: Expr[Int] = Expr(slot)
+            '{
+              val oldVal = $capExpr(${ slotIdx })
+              val curPos = $pos
+              val res    = $nextExp
+              if (res >= 0) then
+                $capExpr(${ slotIdx }) = curPos
+                res
+              else
+                $capExpr(${ slotIdx }) = oldVal
+                -1
+            }
 
-          case _ =>
-            quotes.reflect.report.errorAndAbort(s"Unsupported op: ${inst.op}")
-
+  def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
     '{
       (input: CharSequence) =>
-        val result = ${ compile(prog.start, prog.numInst, 'input, '{0}) }
+        val result: Int =
+          ${
+            compileInst(prog, prog.start, prog.numInst, 'input, '{ 0 }, false, '{ null })
+          }
         result >= 0
     }
 
   def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
-    def compile(
-      pc: Int,
-      end: Int,
-      input: Expr[CharSequence],
-      pos: Expr[Int],
-      capCopy: Expr[Array[Int]],
-      cap: Expr[Array[Int]]
-    ): Expr[Int] = pc match
-      case _ if pc == end =>
-        pos
-
-      case _ =>
-        val inst = prog.getInst(pc)
-        inst.op match
-
-          case InstOp.MATCH =>
-            '{
-
-              if $pos == $input.length then
-                $cap(1) = $pos
-                $pos
-              else
-                -1
-            }
-
-          case InstOp.FAIL =>
-            '{ -1 }
-
-          case InstOp.ALT =>
-            val left  = compile(inst.out, end, input, pos, capCopy, cap)
-            val right = compile(inst.arg, end, input, pos, capCopy, cap)
-            '{
-              val lp = $left
-              if lp >= 0 then lp
-              else
-                $right
-            }
-
-          case InstOp.RUNE | InstOp.RUNE1 =>
-            val runeCheck = inst.matchRuneExpr
-            val nextPos = '{ $pos + 1 }
-            val succ = compile(inst.out, end, input, nextPos, capCopy, cap)
-            '{
-              if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
-                then $succ
-                else -1
-            }
-
-          case InstOp.LOOP =>
-            val body = (p: Expr[Int]) => compile(inst.out, pc,  input, p, capCopy, cap)
-            val exit = (p: Expr[Int]) => compile(inst.arg, end, input, p, capCopy, cap)
-            '{
-              def loop(pos: Int): Int =
-                val next = ${ body('{pos}) }
-                // if no match or zero-length, restore and exit
-                if next == -1 || next == pos then
-                  ${ exit('{pos}) }
-                else
-                  val attempt = loop(next)
-                  if attempt >= pos then attempt
-                  else
-                    ${ exit('{pos}) }
-
-              loop($pos)
-            }
-
-          case InstOp.CAPTURE =>
-            val slot = inst.arg
-            val nextExp = compile(inst.out, end, input, pos, capCopy, cap)
-            '{
-              val oldVal = $cap(${Expr(slot)})
-              val curPos = $pos
-              val res = $nextExp
-
-              if (res >= 0) then
-                $cap(${Expr(slot)}) = curPos
-                res
-              else
-                $cap(${Expr(slot)}) = oldVal
-                -1
-            }
-
-          case _ =>
-            quotes.reflect.report.errorAndAbort(s"Unsupported op: ${inst.op}")
-
     '{
       (input: CharSequence) =>
-        val capCopy = new Array[Int](${Expr(prog.numCap)})
-        val groups = Array.fill(${Expr(prog.numCap)})(-1)
+        val capCopy = new Array[Int](${ Expr(prog.numCap) })
+        val groups  = Array.fill(${ Expr(prog.numCap) })(-1)
         groups(0) = 0
-        val result = ${ compile(prog.start, prog.numInst, 'input, '{0}, 'capCopy, 'groups) }
 
-        if result >= 0 then Some(groups) else None
+        val result: Int =
+          ${
+            compileInst(prog, prog.start, prog.numInst, 'input, '{ 0 }, true, '{ groups })
+          }
+
+        if (result >= 0) then Some(groups) else None
     }
 
   def matches(prog: Prog, input: CharSequence): Boolean = {
