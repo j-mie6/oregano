@@ -28,7 +28,7 @@ class BacktrackBenchmark {
 
   @Setup(Level.Trial)
   def validateCorrectness(): Unit = {
-    def check(pattern: String, input: String): Unit = {
+    inline def check(inline pattern: String, input: String): Unit = {
       val expected = pattern.r.matches(input)
       val actual = pattern.regex.matches(input)
       assert(actual == expected, s"Mismatch on '$pattern' vs '$input' — expected: $expected, got: $actual")

@@ -9,25 +9,16 @@ import oregano.regex
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Thread)
 class LoopBenchmark {
-  var stagedRegex = "a".regex
-  val notInlined = "a"
-  var runtimeRegex = notInlined.r
-  var testInput: String = uninitialized
+  inline val input = "(a|b)*"
+  val stagedRegex = input.regex
+  val inputCopy = "(a|b)*" 
+  val runtimeRegex = inputCopy.regex
+  val testInput = "ababababababa" * 10
 
-  @Setup(Level.Iteration)
-  def setup(): Unit = {
-    // inline val input = "(a|b)*"
-    inline val input = "(a|b)*ababababababababa"
-    val stagedRegex = input.regex
-    val inputCopy = "(a|b)*" 
-    val runtimeRegex = inputCopy.r
-    testInput = "ababababababa" * 1000
-  }
-
-  @Benchmark
-  def javaImpl(): Unit = {
-    val result = runtimeRegex.matches(testInput)
-  }
+  // @Benchmark
+  // def javaImpl(): Unit = {
+  //   val result = runtimeRegex.matches(testInput)
+  // }
 
   // @Benchmark
   // def backtrackCPS(): Unit = {
@@ -35,14 +26,19 @@ class LoopBenchmark {
   // }
 
   // @Benchmark
-  // def linear(): Unit = {
-  //   val _ = stagedRegex.matchesLinear(testInput)
+  // def StagedLinearNoCap(): Unit = {
+  //   val result = stagedRegex.matches(testInput)
   // }
 
   @Benchmark
-  def backtrackProg(): Unit = {
-    val result = stagedRegex.matchesBacktrack(testInput)
+  def unstagedLinearRE2(): Unit = {
+    val _ = stagedRegex.matchesLinear(testInput)
   }
+
+  // @Benchmark
+  // def backtrackProg(): Unit = {
+  //   val result = stagedRegex.matchesBacktrack(testInput)
+  // }$stepLoopExpr(compileTimeMachine, input)
 
 
   // @Benchmark
