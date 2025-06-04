@@ -1,9 +1,6 @@
 package oregano.internal
 
 import scala.quoted.*
-import oregano.internal.Pattern
-import oregano.internal.ProgramCompiler
-import java.util.prefs.BackingStoreException
 
 object StagedMatchers:
 

@@ -1,13 +1,10 @@
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks.*
-import scala.quoted.staging.*
-import oregano.internal.{Pattern, PatternResult, CPSMatcher}
-import org.scalatest.SequentialNestedSuiteExecution
 import oregano.internal.StagedMatchers.{stagedCPS, stagedCPSWithCaps}
 
 // need to be in same class, runtime MSP is not multithread safe
-class StagedCPSMatcherTests extends AnyFlatSpec with SequentialNestedSuiteExecution {
+class StagedCPSMatcherTests extends AnyFlatSpec {
 
   val nestedMatcher = stagedCPS("((a*)b*)*bc|(def)")
 
@@ -97,6 +94,40 @@ class StagedCPSMatcherTests extends AnyFlatSpec with SequentialNestedSuiteExecut
     }
   }
 
+  val matcherWithBigClass = stagedCPS("[a-zA-Z0-9_.+-]*")
+
+  behavior of "StagedCPSMatcher - regex [a-zA-Z0-9_.+-]*"
+
+  it should "match valid strings" in {
+    val validInputs = Table(
+      "input",
+      "user.name+tag-123",
+      "abc123XYZ",
+      "a_b-c.d+e"
+    )
+
+    forAll(validInputs) { str =>
+      withClue(s"Should have matched: $str") {
+        matcherWithBigClass(str) shouldBe true
+      }
+    }
+  }
+
+  it should "reject invalid strings" in {
+    val invalidInputs = Table(
+      "input",
+      "abc123!",  
+      "user@name", 
+      "tag#123",   
+      "invalid space"
+    )
+
+    forAll(invalidInputs) { str =>
+      withClue(s"Should NOT have matched: $str") {
+        matcherWithBigClass(str) shouldBe false
+      }
+    }
+  }
 
   val complexExpressionMatcher = stagedCPS("((ab)*|[cd]*)e(f|g)[0-9]")
 
