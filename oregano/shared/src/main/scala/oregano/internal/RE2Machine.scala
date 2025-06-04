@@ -20,6 +20,7 @@ class RE2Queue(n: Int):
   val densePcs: Array[Int] = new Array[Int](n)
   val sparse: Array[Int] = new Array[Int](n)
   var size: Int = 0
+  var anchorEnd: Boolean = false
 
   def contains(pc: Int): Boolean =
     val j = sparse(pc)
@@ -61,6 +62,7 @@ class RE2Machine(val prog: Prog) extends Machine:
   // if desired, can be set to 2 to prevent tracking all groups
   // var ncap = 2
   var ncap: Int = prog.numCap 
+  var anchorEnd = true
 
 
   // used if recycling machines across mutliple expressions
@@ -167,7 +169,7 @@ class RE2Machine(val prog: Prog) extends Machine:
           case InstOp.MATCH =>
             // copy thread freeing semantics from RE2J, only return true if full match found
             // in practice, partial matches tracked using t.cap(1), anchors for full matches
-            if rune == -1 then
+            if anchorEnd && rune == -1 || !anchorEnd then
               t.cap(1) = pos
               Array.copy(t.cap, 0, matchcap, 0, ncap)
               matchedHere = true
@@ -221,8 +223,11 @@ class RE2Machine(val prog: Prog) extends Machine:
       if pos < input.length then pos += 1
       val tmp = runq; runq = nextq; nextq = tmp
     
-    // println(matchcap.mkString(","))
-    matched
+    println(matchcap.mkString(","))
+    if anchorEnd then
+      matchcap(1) == input.length
+    else
+      matchcap(1) != -1
 
 @main def testRE2Machine(): Unit =
   val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((ab)*|(cd)*)*")
@@ -232,3 +237,7 @@ class RE2Machine(val prog: Prog) extends Machine:
   println(machine.matches("abababcdcdcdababa"))
   println(machine.matches("abababcdcdcd"))
   println(machine.matches("abababcdcdc"))
+  machine.anchorEnd = false
+  println(machine.matches("ababyabadabadoo"))
+  println(machine.matches("abababcdcdc"))
+
