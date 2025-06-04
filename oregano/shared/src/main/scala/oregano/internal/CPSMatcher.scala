@@ -2,7 +2,6 @@ package oregano.internal
 
 import scala.quoted.*
 import cats.collections.Diet
-import scala.collection.mutable.ArrayBuffer
 
 final case class MatchResult(input: CharSequence, matches: Array[Int]) {
   def start(group: Int): Int = matches(2 * group)
@@ -10,22 +9,6 @@ final case class MatchResult(input: CharSequence, matches: Array[Int]) {
   def group(group: Int): String =
     input.subSequence(start(group), end(group)).toString
 }
-
-// class CheckpointStack(groups: Array[Int]) {
-//   val stack = ArrayBuffer[(Int, Int)]()
-
-//   inline def saveState(pos: Int): Unit = 
-//     stack += ((pos, groups(pos)))
-
-//   inline def checkpoint(): Int = stack.size
-
-//   inline def restore(checkpoint: Int): Unit = {
-//     while (stack.size > checkpoint) {
-//       val (pos, oldVal) = stack.remove(stack.size - 1)
-//       groups(pos) = oldVal
-//     }
-//   }
-// }
 
 // essentially copy matchRuneExpr; todo: use a common function?
 def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
@@ -227,7 +210,6 @@ object CPSMatcher:
     withCaps: Boolean,
     groupsExpr: Expr[Array[Int]]
   )(using Quotes): Expr[Int => Int] =
-    import quotes.reflect.*
 
     p match
       case Pattern.Lit(c) =>
@@ -328,7 +310,7 @@ object CPSMatcher:
         val matcherFn: Int => Int =
           ${ compileSubtree(pattern, 'input, '{ cont }, false, '{ null }) }
 
-        matcherFn(0) >= 0
+        matcherFn(0) == input.length
     }
 
   def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
@@ -344,11 +326,20 @@ object CPSMatcher:
           ${ compileSubtree(pattern, 'input, '{ cont }, true, '{ groups }) }
 
         val matched = matcherFn(0)
-        if matched >= 0 then
+        if matched == inputLen then
           groups(1) = matched
           Some(groups)
         else
           None
+    }
+
+  def genFinderPattern(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Boolean] =
+    '{
+      (input: CharSequence) =>
+        val matcherFn: Int => Int =
+          ${ compileSubtree(pattern, 'input, '{ (i: Int) => i }, false, '{ null }) }
+
+        matcherFn(0) >= 0
     }
 
   def makeMatcher(pattern: Pattern, numGroups: Int, numReps: Int): (CharSequence, Boolean) => Option[Array[Int]] = {
