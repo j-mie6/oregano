@@ -11,21 +11,21 @@ final case class MatchResult(input: CharSequence, matches: Array[Int]) {
     input.subSequence(start(group), end(group)).toString
 }
 
-class CheckpointStack(groups: Array[Int]) {
-  val stack = ArrayBuffer[(Int, Int)]()
+// class CheckpointStack(groups: Array[Int]) {
+//   val stack = ArrayBuffer[(Int, Int)]()
 
-  inline def saveState(pos: Int): Unit = 
-    stack += ((pos, groups(pos)))
+//   inline def saveState(pos: Int): Unit = 
+//     stack += ((pos, groups(pos)))
 
-  inline def checkpoint(): Int = stack.size
+//   inline def checkpoint(): Int = stack.size
 
-  inline def restore(checkpoint: Int): Unit = {
-    while (stack.size > checkpoint) {
-      val (pos, oldVal) = stack.remove(stack.size - 1)
-      groups(pos) = oldVal
-    }
-  }
-}
+//   inline def restore(checkpoint: Int): Unit = {
+//     while (stack.size > checkpoint) {
+//       val (pos, oldVal) = stack.remove(stack.size - 1)
+//       groups(pos) = oldVal
+//     }
+//   }
+// }
 
 // essentially copy matchRuneExpr; todo: use a common function?
 def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
@@ -49,175 +49,306 @@ def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
   }
 }
 
+// object CPSMatcher:
+//   def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] =
+//     def compile(
+//       p: Pattern,
+//       input: Expr[CharSequence],
+//       cont: Expr[Int => Int]
+//     ): Expr[Int => Int] = p match
+//       case Pattern.Lit(c) =>
+//         '{
+//           (pos: Int) =>
+//             if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
+//               $cont(pos + 1)
+//             else -1
+//         }
+
+//       case Pattern.Cat(ps) =>
+//         ps.foldRight(cont)((p, acc) => compile(p, input, acc))
+
+//       case Pattern.Alt(p1, p2) =>
+//         val left  = compile(p1, input, cont)
+//         val right = compile(p2, input, cont)
+//         '{
+//           (pos: Int) =>
+//             val lp = $left(pos)
+//             if lp >= 0 then lp else $right(pos)
+//         }
+
+//       case Pattern.Class(diet) =>
+//         val runeCheckExpr = dietContains(diet)
+//         '{
+//           (pos: Int) =>
+//             if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
+//               $cont(pos + 1)
+//             else -1
+//         }
+
+//       case Pattern.Rep0(sub, _) =>
+//         '{
+//           def self(pos: Int): Int =
+//             val step = ${
+//               compile(sub, input, '{
+//                 (next: Int) =>
+//                   if next != pos then self(next) else -1
+//               })
+//             }
+//             val r = step(pos)
+//             if r >= 0 then r else ${ cont }(pos)
+//           self
+//         }
+
+//       case Pattern.Capture(idx, sub) =>
+//         val inner = compile(sub, input, cont)
+//         '{
+//           (pos: Int) =>
+//             $inner(pos)
+//         }
+
+//     '{
+//       (input: CharSequence) =>
+//         val cont = (i: Int) => {
+//           if i == input.length then
+//             i
+//           else -1
+//         }
+//         val matcherFn = ${ compile(pattern, 'input, 'cont) }
+//         if matcherFn(0) >= 0 then
+//           true
+//         else false
+//     }
+
+//   // using explicit call-stack tracking a la java.util.regex
+//   def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
+//     def compile(
+//       p: Pattern,
+//       input: Expr[CharSequence],
+//       groups: Expr[Array[Int]],
+//       cont: Expr[Int => Int]
+//     ): Expr[Int => Int] = p match
+//       case Pattern.Lit(c) =>
+//         '{
+//           (pos: Int) =>
+//             if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
+//               $cont(pos + 1)
+//             else -1
+//         }
+
+//       case Pattern.Class(diet) =>
+//         val runeCheckExpr = dietContains(diet)
+//         '{
+//           (pos: Int) =>
+//             if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
+//               $cont(pos + 1)
+//             else -1
+//         }
+
+//       case Pattern.Cat(ps) =>
+//         ps.foldRight(cont)((sub, acc) => compile(sub, input, groups, acc))
+
+//       case Pattern.Alt(l, r) =>
+//         val left  = compile(l, input, groups, cont)
+//         val right = compile(r, input, groups, cont)
+//         '{
+//           (pos: Int) =>
+//             val lp = $left(pos)
+//             if lp >= 0 then lp
+//             else {
+//               $right(pos)
+//             }
+//         }
+
+//       case Pattern.Rep0(sub, _) =>
+//         '{
+//           def self(pos: Int): Int =
+//             val step = ${
+//               compile(sub, input, groups, '{
+//                 (next: Int) =>
+//                   if next != pos then self(next) else -1
+//               })
+//             }
+//             val out = step(pos)
+//             if out >= 0 then out
+//             else {
+//               $cont(pos)
+//             }
+//           self
+//         }
+
+//       case Pattern.Capture(idx, sub) =>
+//         val inner = compile(sub, input, groups, '{
+//           (endPos: Int) =>
+//             val savedEnd = $groups(2 * ${Expr(idx)} + 1)
+//             $groups(2 * ${Expr(idx)} + 1) = endPos
+//             val res = $cont(endPos)
+//             if res >= 0 then res
+//             else {
+//               $groups(2 * ${Expr(idx)} + 1) = savedEnd
+//               -1
+//             }
+//         })
+//         '{
+//           (pos: Int) =>
+//             val savedStart = $groups(2 * ${Expr(idx)})
+//             $groups(2 * ${Expr(idx)}) = pos
+//             val res = $inner(pos)
+//             if res >= 0 then res
+//             else {
+//               $groups(2 * ${Expr(idx)}) = savedStart
+//               -1
+//             }
+//         }
+
+//     '{
+//       (input: CharSequence) =>
+//         val inputLen = input.length
+//         val groups = Array.fill(${Expr(numGroups * 2)})(-1)
+//         groups(0) = 0
+
+//         val cont = (i: Int) =>
+//           if i == inputLen then i else -1
+
+//         val matcherFn = ${ compile(pattern, 'input, 'groups, 'cont) }
+
+//         val matched = matcherFn(0)
+//         if matched >= 0 then {
+//           groups(1) = matched // end of match
+//           // println(s"Success: ${groups.mkString(", ")}")
+//           Some(groups)
+//         } else None
+//     }
 
 object CPSMatcher:
-  def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] =
-    def compile(
-      p: Pattern,
-      input: Expr[CharSequence],
-      cont: Expr[Int => Int]
-    ): Expr[Int => Int] = p match
+  private def compileSubtree(
+    p: Pattern,
+    input: Expr[CharSequence],
+    cont: Expr[Int => Int],
+    withCaps: Boolean,
+    groupsExpr: Expr[Array[Int]]
+  )(using Quotes): Expr[Int => Int] =
+    import quotes.reflect.*
+
+    p match
       case Pattern.Lit(c) =>
         '{
           (pos: Int) =>
-            if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
+            if pos < $input.length && $input.charAt(pos) == ${ Expr(c) } then
               $cont(pos + 1)
-            else -1
+            else
+              -1
+        }
+
+      case Pattern.Class(diet) =>
+        val runeCheck: Expr[Int => Boolean] = dietContains(diet)
+        '{
+          (pos: Int) =>
+            if pos < $input.length &&
+               ${ Expr.betaReduce('{ $runeCheck($input.charAt(pos).toInt) }) }
+            then
+              $cont(pos + 1)
+            else
+              -1
         }
 
       case Pattern.Cat(ps) =>
-        ps.foldRight(cont)((p, acc) => compile(p, input, acc))
+        ps.foldRight(cont) { (subPattern, nextCont) =>
+          compileSubtree(subPattern, input, nextCont, withCaps, groupsExpr)
+        }
 
       case Pattern.Alt(p1, p2) =>
-        val left  = compile(p1, input, cont)
-        val right = compile(p2, input, cont)
+        val leftExpr  = compileSubtree(p1, input, cont, withCaps, groupsExpr)
+        val rightExpr = compileSubtree(p2, input, cont, withCaps, groupsExpr)
         '{
           (pos: Int) =>
-            val lp = $left(pos)
-            if lp >= 0 then lp else $right(pos)
-        }
-
-      case Pattern.Class(diet) =>
-        val runeCheckExpr = dietContains(diet)
-        '{
-          (pos: Int) =>
-            if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
-              $cont(pos + 1)
-            else -1
+            val lp = $leftExpr(pos)
+            if lp >= 0 then lp else $rightExpr(pos)
         }
 
       case Pattern.Rep0(sub, _) =>
         '{
           def self(pos: Int): Int =
             val step = ${
-              compile(sub, input, '{
-                (next: Int) =>
-                  if next != pos then self(next) else -1
-              })
+              compileSubtree(
+                sub,
+                input,
+                '{ (next: Int) =>
+                   if next != pos then self(next) else -1
+                 },
+                withCaps,
+                groupsExpr
+              )
             }
             val r = step(pos)
-            if r >= 0 then r else ${ cont }(pos)
+            if r >= 0 then r else $cont(pos)
           self
         }
 
       case Pattern.Capture(idx, sub) =>
-        val inner = compile(sub, input, cont)
-        '{
-          (pos: Int) =>
-            $inner(pos)
-        }
+        if (!withCaps) then
+          compileSubtree(sub, input, cont, false, '{ null })
+        else
+          val endSlotIdx: Expr[Int] = Expr(2 * idx + 1)
+          val cont1: Expr[Int => Int] =
+            '{
+              (endPos: Int) =>
+                val savedEnd = $groupsExpr(${ endSlotIdx })
+                $groupsExpr(${ endSlotIdx }) = endPos
+                val res = $cont(endPos)
+                if (res >= 0) then
+                  res
+                else {
+                  $groupsExpr(${ endSlotIdx }) = savedEnd
+                  -1
+                }
+            }
 
+          val inner: Expr[Int => Int] =
+            compileSubtree(sub, input, cont1, true, groupsExpr)
+
+          val startSlotIdx: Expr[Int] = Expr(2 * idx)
+          '{
+            (pos: Int) =>
+              val savedStart = $groupsExpr(${ startSlotIdx })
+              $groupsExpr(${ startSlotIdx }) = pos
+              val r2 = ${ inner }(pos)
+              if (r2 >= 0) then
+                r2
+              else {
+                $groupsExpr(${ startSlotIdx }) = savedStart
+                -1
+              }
+          }
+
+  def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] =
     '{
       (input: CharSequence) =>
-        val cont = (i: Int) => {
-          if i == input.length then
-            i
-          else -1
-        }
-        val matcherFn = ${ compile(pattern, 'input, 'cont) }
-        if matcherFn(0) >= 0 then
-          true
-        else false
+        val cont: Int => Int = (i: Int) => if i == input.length then i else -1
+
+        val matcherFn: Int => Int =
+          ${ compileSubtree(pattern, 'input, '{ cont }, false, '{ null }) }
+
+        matcherFn(0) >= 0
     }
 
-  // using explicit call-stack tracking a la java.util.regex
   def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
-    def compile(
-      p: Pattern,
-      input: Expr[CharSequence],
-      groups: Expr[Array[Int]],
-      cont: Expr[Int => Int]
-    ): Expr[Int => Int] = p match
-      case Pattern.Lit(c) =>
-        '{
-          (pos: Int) =>
-            if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
-              $cont(pos + 1)
-            else -1
-        }
-
-      case Pattern.Class(diet) =>
-        val runeCheckExpr = dietContains(diet)
-        '{
-          (pos: Int) =>
-            if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
-              $cont(pos + 1)
-            else -1
-        }
-
-      case Pattern.Cat(ps) =>
-        ps.foldRight(cont)((sub, acc) => compile(sub, input, groups, acc))
-
-      case Pattern.Alt(l, r) =>
-        val left  = compile(l, input, groups, cont)
-        val right = compile(r, input, groups, cont)
-        '{
-          (pos: Int) =>
-            val lp = $left(pos)
-            if lp >= 0 then lp
-            else {
-              $right(pos)
-            }
-        }
-
-      case Pattern.Rep0(sub, _) =>
-        '{
-          def self(pos: Int): Int =
-            val step = ${
-              compile(sub, input, groups, '{
-                (next: Int) =>
-                  if next != pos then self(next) else -1
-              })
-            }
-            val out = step(pos)
-            if out >= 0 then out
-            else {
-              $cont(pos)
-            }
-          self
-        }
-
-      case Pattern.Capture(idx, sub) =>
-        val inner = compile(sub, input, groups, '{
-          (endPos: Int) =>
-            val savedEnd = $groups(2 * ${Expr(idx)} + 1)
-            $groups(2 * ${Expr(idx)} + 1) = endPos
-            val res = $cont(endPos)
-            if res >= 0 then res
-            else {
-              $groups(2 * ${Expr(idx)} + 1) = savedEnd
-              -1
-            }
-        })
-        '{
-          (pos: Int) =>
-            val savedStart = $groups(2 * ${Expr(idx)})
-            $groups(2 * ${Expr(idx)}) = pos
-            val res = $inner(pos)
-            if res >= 0 then res
-            else {
-              $groups(2 * ${Expr(idx)}) = savedStart
-              -1
-            }
-        }
-
     '{
       (input: CharSequence) =>
         val inputLen = input.length
-        val groups = Array.fill(${Expr(numGroups * 2)})(-1)
+        val groups = Array.fill(${ Expr(numGroups * 2) })(-1)
         groups(0) = 0
 
-        val cont = (i: Int) =>
-          if i == inputLen then i else -1
+        val cont: Int => Int = (i: Int) => if i == inputLen then i else -1
 
-        val matcherFn = ${ compile(pattern, 'input, 'groups, 'cont) }
+        val matcherFn: Int => Int =
+          ${ compileSubtree(pattern, 'input, '{ cont }, true, '{ groups }) }
 
         val matched = matcherFn(0)
-        if matched >= 0 then {
-          groups(1) = matched // end of match
-          // println(s"Success: ${groups.mkString(", ")}")
+        if matched >= 0 then
+          groups(1) = matched
           Some(groups)
-        } else None
+        else
+          None
     }
 
   def makeMatcher(pattern: Pattern, numGroups: Int, numReps: Int): (CharSequence, Boolean) => Option[Array[Int]] = {
