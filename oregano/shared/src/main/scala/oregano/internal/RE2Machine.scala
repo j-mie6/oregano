@@ -4,6 +4,9 @@ abstract class Machine {
   def matches(input: CharSequence): Boolean
 }
 
+type StepFn = (Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit
+
+
 /* 
 A Scala port of the RE2J machine, currently to help me reason about things
 */
@@ -56,6 +59,7 @@ class RE2Machine(val prog: Prog) extends Machine:
   var matchcap: Array[Int] = new Array[Int](prog.numCap)
   // note: re2 will match twice, only tracking groups if .group is called: this is an API decision, for simplicity we track all groups
   // if desired, can be set to 2 to prevent tracking all groups
+  // var ncap = 2
   var ncap: Int = prog.numCap 
 
 
@@ -162,7 +166,7 @@ class RE2Machine(val prog: Prog) extends Machine:
         inst.op match
           case InstOp.MATCH =>
             // copy thread freeing semantics from RE2J, only return true if full match found
-            // in practice, partial matches tracked using t.cap(1)
+            // in practice, partial matches tracked using t.cap(1), anchors for full matches
             if rune == -1 then
               t.cap(1) = pos
               Array.copy(t.cap, 0, matchcap, 0, ncap)
@@ -217,8 +221,87 @@ class RE2Machine(val prog: Prog) extends Machine:
       if pos < input.length then pos += 1
       val tmp = runq; runq = nextq; nextq = tmp
     
-    println(matchcap.mkString(","))
+    // println(matchcap.mkString(","))
     matched
+
+
+  // def matchesWithDispatcher(input: CharSequence, dispatcher: (RE2Machine, Int, Array[Int], Int, RE2Queue, RE2Thread) => RE2Thread): Boolean =
+  //   var runq = q0
+  //   var nextq = q1
+  //   var pos = 0
+  //   matched = false
+  //   matchcap.indices.foreach(i => matchcap(i) = -1)
+  //   matchcap(0) = 0
+
+  //   val _ = add(prog.start, 0, matchcap.clone(), runq, null)
+
+  //   while !runq.isEmpty do
+  //     val rune =
+  //       if pos < input.length then input.charAt(pos).toInt
+  //       else -1 // EOF
+
+  //     matched = stepWithDispatcher(runq, nextq, pos, rune, dispatcher)
+
+  //     // Only advance position if not at EOF
+  //     if pos < input.length then pos += 1
+  //     val tmp = runq; runq = nextq; nextq = tmp
+    
+  //   // println(matchcap.mkString(","))
+  //   matched
+
+  // def stepWithDispatcher(
+  //   runq: RE2Queue,
+  //   nextq: RE2Queue,
+  //   pos: Int,
+  //   rune: Int,
+  //   dispatcher: (RE2Machine, Int, Array[Int], Int, RE2Queue, RE2Thread) => RE2Thread
+  // ): Boolean =
+  //   var matchedHere = false
+  //   var j = 0
+
+  //   while j < runq.size do
+  //     var t = runq.denseThreads(j)
+  //     if t != null then
+  //       val inst = t.inst
+
+  //       var addNext = false
+  //       inst.op match
+  //         case InstOp.MATCH =>
+  //           // copy thread freeing semantics from RE2J, only return true if full match found
+  //           // in practice, partial matches tracked using t.cap(1), anchors for full matches
+  //           if rune == -1 then
+  //             t.cap(1) = pos
+  //             Array.copy(t.cap, 0, matchcap, 0, ncap)
+  //             matchedHere = true
+  //             free(runq, j + 1)
+
+  //         case InstOp.RUNE =>
+  //           addNext = inst.matchRune(rune)
+
+  //         case InstOp.RUNE1 =>
+  //           addNext = rune == inst.runes(0)
+
+  //         case InstOp.RUNE_ANY =>
+  //           addNext = true
+
+  //         case InstOp.RUNE_ANY_NOT_NL =>
+  //           addNext = rune != '\n'
+
+  //         case _ =>
+  //           throw new IllegalStateException(s"bad inst: ${inst.op}")
+
+  //       if addNext then
+  //         t = dispatcher(this, inst.out, t.cap, pos + 1, nextq, t)
+
+  //       if t != null then
+  //         free(t)
+  //         runq.denseThreads(j) = null
+
+  //     j += 1
+
+  //   runq.clear()
+  //   matchedHere
+
 
   // def stepWithTable(
   //   addTable: Array[AddFn],
@@ -282,7 +365,7 @@ class RE2Machine(val prog: Prog) extends Machine:
   //   var nextq = q1
   //   var pos   = 0
   //   matched   = false
-  //   java.util.Arrays.fill(matchcap, 0)
+  //   Array.fill(matchcap.length)(-1)
 
   //   // initialise first thread
   //   addTable(prog.start)(this, 0, prog.start, matchcap.clone(), runq, null)
@@ -294,6 +377,54 @@ class RE2Machine(val prog: Prog) extends Machine:
   //     val tmp = runq; runq = nextq; nextq = tmp
   //   // println(matchcap.mkString(" "))
   //   matched
+
+  def stepWithTable(
+    stepTable: Array[StepFn],
+    runq: RE2Queue,
+    nextq: RE2Queue,
+    pos: Int,
+    rune: Int
+  ): Boolean =
+    var matchedHere = false
+    var j = 0
+
+    while j < runq.size do
+      val pc = runq.densePcs(j)
+      val t  = runq.denseThreads(j)
+      if t != null then
+        val inst = t.inst
+
+        if inst.op == InstOp.MATCH && rune == -1 then
+          t.cap(1) = pos
+          Array.copy(t.cap, 0, matchcap, 0, ncap)
+          matchedHere = true
+          free(runq, j + 1)
+        else
+          stepTable(pc)(rune, pos, runq, nextq, j, this)
+
+      j += 1
+
+    runq.clear()
+    matchedHere
+
+  def matchesWithStepTable(input: CharSequence, stepTable: Array[StepFn]): Boolean =
+    var runq  = q0
+    var nextq = q1
+    var pos   = 0
+    matched   = false
+    Array.fill(matchcap.length)(-1)
+    matchcap(0) = 0
+
+    val _ = add(prog.start, 0, matchcap.clone(), runq, null)
+
+    while !runq.isEmpty do
+      val rune = if pos < input.length then input.charAt(pos).toInt else -1
+      matched = stepWithTable(stepTable, runq, nextq, pos, rune)
+      if pos < input.length then pos += 1
+      val tmp = runq; runq = nextq; nextq = tmp
+
+    matched
+
 
 @main def testRE2Machine(): Unit =
   val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((ab)*|(cd)*)*")
