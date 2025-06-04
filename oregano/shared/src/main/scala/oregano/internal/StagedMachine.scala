@@ -80,13 +80,13 @@ object StagedMachine:
       rune: Expr[Int],
       // addDispatcher: Expr[(Int, Array[Int], Int, RE2Queue, RE2Thread) => RE2Thread]
     )(using Quotes): List[CaseDef] =
-      val requiredInstOps = Set(
-        InstOp.MATCH,
-        InstOp.RUNE,
-        InstOp.RUNE1,
-        InstOp.RUNE_ANY,
-        InstOp.RUNE_ANY_NOT_NL
-      )
+      // val requiredInstOps = Set(
+      //   InstOp.MATCH,
+      //   InstOp.RUNE,
+      //   InstOp.RUNE1,
+      //   InstOp.RUNE_ANY,
+      //   InstOp.RUNE_ANY_NOT_NL
+      // )
       // (0 until prog.numInst).toList filter(
       //   pc => requiredInstOps.contains(prog.getInst(pc).op)
       // ) map { pc =>
@@ -105,8 +105,6 @@ object StagedMachine:
         CaseDef(Literal(IntConstant(pc)), None, body.asTerm)
       }
     
-    val progStartExpr = Expr(prog.start)
-      
     '{
       (m: RE2Machine, input: CharSequence) =>
         var runq = m.q0
@@ -169,8 +167,6 @@ object StagedMachine:
     }
 
   def generateStepHandlers(prog: Prog)(using Quotes): Expr[Array[(Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit]] =
-    import quotes.reflect.*
-
     val handlerExprs: Seq[Expr[(Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit]] =
       (0 until prog.numInst).toList.map { pc =>
         val inst = prog.getInst(pc)
@@ -212,7 +208,7 @@ object StagedMachine:
       case InstOp.MATCH =>
         '{
           val t = $runq.getThread($pcExpr)
-          if $rune == -1 then // should be some EOF, need to wrap inputs
+          if $rune == -1 && $m.anchorEnd || !$m.anchorEnd then // should be some EOF, need to wrap inputs
             t.cap(1) = $pos
             Array.copy(t.cap, 0, $m.matchcap, 0, $m.ncap)
             $m.matched = true
@@ -223,7 +219,6 @@ object StagedMachine:
 
       case InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL =>
         val runeCheck = inst.matchRuneExpr
-        val instOutExpr = Expr(inst.out)
         '{
           var t = $runq.getThread($pcExpr)
           if t != null then
