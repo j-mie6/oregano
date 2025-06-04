@@ -67,5 +67,30 @@ class ParserTests extends AnyFlatSpec {
         cls.parse("[a&&&]") shouldBe Success(Class(Diet.one('&'.toInt).add('a'.toInt)))
     }
 
+    they should "accept Kleene stars" in {
+        regex.parse("[a]*") shouldBe Success(Cat(List(Rep0(Class(Diet.one('a'.toInt))))))
+        regex.parse("[a-z]*") shouldBe Success(Cat(List(Rep0(Class(Diet.fromRange(Range('a'.toInt, 'z'.toInt)))))))
+    }
+
+    they should "handle Groups correctly" in {
+        regex.parse("(a)") shouldBe Success(Cat(List(Capture(Cat(List(Lit('a'.toInt)))))))
+        regex.parse("(a|b)") shouldBe Success(Cat(List(Capture(Alt(Cat(List(Lit('a'.toInt))),Cat(List(Lit('b'.toInt))))))))
+        regex.parse("(a|b)*") shouldBe Success(Cat(List(Rep0(Capture(Alt(Cat(List(Lit('a'.toInt))), Cat(List(Lit('b'.toInt)))))))))
+        regex.parse("((a|b)*)") shouldBe Success(Cat(List(Capture(Cat(List(Rep0(Capture(Alt(Cat(List(Lit('a'.toInt))), Cat(List(Lit('b'.toInt))))))))))))
+    }
+
+    they should "handle predefined classes correctly" in {
+        regex.parse("\\d") shouldBe Success(Cat(List(Class(Diet.fromRange(Range('0'.toInt, '9'.toInt))))))
+        regex.parse("\\D") shouldBe Success(Cat(List(Class(Regex.AllSet -- Diet.fromRange(Range('0'.toInt, '9'.toInt))))))
+        regex.parse("\\w") shouldBe Success(Cat(List(Class(Diet.fromRange(Range('a'.toInt, 'z'.toInt)) |
+            Diet.fromRange(Range('A'.toInt, 'Z'.toInt)) | Diet.fromRange(Range('0'.toInt, '9'.toInt)) | Diet.one('_'.toInt)))))
+        regex.parse("\\W") shouldBe Success(Cat(List(Class(Regex.AllSet -- (Diet.fromRange(Range('a'.toInt, 'z'.toInt)) | 
+            Diet.fromRange(Range('A'.toInt, 'Z'.toInt)) | Diet.fromRange(Range('0'.toInt, '9'.toInt)) | Diet.one('_'.toInt))))))
+        regex.parse("\\s") shouldBe Success(Cat(List(Class(Diet.one(' '.toInt) | Diet.one('\t'.toInt) | 
+            Diet.one('\n'.toInt) | Diet.one('\u000B'.toInt) | Diet.one('\r'.toInt) | Diet.one('\f'.toInt)))))
+        regex.parse("\\S") shouldBe Success(Cat(List(Class(Regex.AllSet -- (Diet.one(' '.toInt) | 
+            Diet.one('\t'.toInt) | Diet.one('\n'.toInt) | Diet.one('\u000B'.toInt) | Diet.one('\r'.toInt) | Diet.one('\f'.toInt))))))
+    }
+
     // TODO: more tests when escape sequences are implemented
 }
