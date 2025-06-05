@@ -41,12 +41,11 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
             "org.scalacheck" %%% "scalacheck" % "1.17.1" % Test,           // NOTE: held back for 0.4 native
             "org.scalatestplus" %%% "scalacheck-1-17" % "3.2.18.0" % Test, // NOTE: held back for 0.4 native
         ),
-
+        
         Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
     )
 
 lazy val oreganoJvm = oregano.jvm.settings(
-  libraryDependencies += "org.scala-lang" %% "scala3-staging" % Scala3 % Test,
   libraryDependencies += "com.google.re2j" % "re2j" % "1.8",
   libraryDependencies += "codes.quine.labo" %% "re2s" % "0.1.1-SNAPSHOT",
 )
