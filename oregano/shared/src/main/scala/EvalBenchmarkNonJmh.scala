@@ -7,7 +7,8 @@ object ManualBench extends App {
 
   inline val email = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z]+)+"
   inline val filepath = "/[a-zA-Z0-9._/-]+"
-  inline val hex = "#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]"
+  inline val hex =
+    "#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]"
   inline val log = ".*(?:INFO|WARN|ERROR).*"
   inline val identifier = "[a-zA-Z_][a-zA-Z0-9_]*"
 
@@ -34,16 +35,16 @@ object ManualBench extends App {
     "/usr/bin/bash",
     "/home/user/.config/settings.json",
     "/tmp/data-01/log.txt",
-    "home/user/file",        // invalid: no leading slash
-    "/"                      // invalid: no trailing path
+    "home/user/file", // invalid: no leading slash
+    "/" // invalid: no trailing path
   )
 
   val hexColors = Array(
     "#FFAABB",
     "#abcdef",
     "#123ABC",
-    "#12345",      // too short
-    "123456"       // missing #
+    "#12345", // too short
+    "123456" // missing #
   )
 
   val logs = Array(
@@ -52,8 +53,8 @@ object ManualBench extends App {
     "ERROR Connection timeout",
     "2024-11-09 03:17:22 ERROR Disk full on /dev/sda1 during backup. Aborting job 'nightly-sync'. Cleanup required.",
     "2023-12-05 02:11:48 DEBUG Loaded 8 config profiles from /etc/app/config.d/, applying overrides and environment vars",
-    "DEBUG: all good",       // should not match
-    "Startup complete"       // should not match
+    "DEBUG: all good", // should not match
+    "Startup complete" // should not match
   )
 
   val identifiers = Array(
@@ -62,18 +63,21 @@ object ManualBench extends App {
     "camelCaseIdentifier",
     "X",
     "_x_99_z",
-    "42start",     // invalid: starts with digit
-    "-dash",       // invalid: starts with '-'
-    "foo-bar",     // invalid: contains '-'
+    "42start", // invalid: starts with digit
+    "-dash", // invalid: starts with '-'
+    "foo-bar", // invalid: contains '-'
     "",
-    "@symbol"      // invalid: starts with '@'
+    "@symbol" // invalid: starts with '@'
   )
-
 
   val rand = new Random(42)
   val N = 1000000
 
-    def runBench(name: String, data: Array[String], regex: String => Boolean): Unit = {
+  def runBench(
+      name: String,
+      data: Array[String],
+      regex: String => Boolean
+  ): Unit = {
     val runs = 10
     var totalMs = 0.0
     var totalMatches = 0
@@ -104,4 +108,3 @@ object ManualBench extends App {
 
   main()
 }
-

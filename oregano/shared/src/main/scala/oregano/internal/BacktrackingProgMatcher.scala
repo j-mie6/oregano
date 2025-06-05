@@ -44,7 +44,7 @@ object BacktrackingProgMatcher:
 //             val succ = compile(inst.out, end, input, nextPos)
 //             '{
 //               if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
-//                 then 
+//                 then
 //                   $succ
 //                 else -1
 //             }
@@ -179,17 +179,16 @@ object BacktrackingProgMatcher:
 //     }
 
   private def compileInst(
-    prog: Prog,
-    pc: Int,
-    end: Int,
-    input: Expr[CharSequence],
-    pos: Expr[Int],
-    withCaps: Boolean,
-    capExpr: Expr[Array[Int]],
-    wholeMatch: Boolean
+      prog: Prog,
+      pc: Int,
+      end: Int,
+      input: Expr[CharSequence],
+      pos: Expr[Int],
+      withCaps: Boolean,
+      capExpr: Expr[Array[Int]],
+      wholeMatch: Boolean
   )(using Quotes): Expr[Int] =
-    if pc == end then
-      pos
+    if pc == end then pos
     else
       val inst = prog.getInst(pc)
       inst.op match
@@ -199,29 +198,44 @@ object BacktrackingProgMatcher:
               '{
                 if $pos == $input.length then $pos else -1
               }
-            else
-              pos
-          else
-            if wholeMatch then
-              '{
-                if $pos == $input.length then
-                  $capExpr(1) = $pos
-                  $pos
-                else
-                  -1
-              }
-            else
-              '{
+            else pos
+          else if wholeMatch then
+            '{
+              if $pos == $input.length then
                 $capExpr(1) = $pos
                 $pos
-              }
+              else -1
+            }
+          else
+            '{
+              $capExpr(1) = $pos
+              $pos
+            }
 
         case InstOp.FAIL =>
           '{ -1 }
 
         case InstOp.ALT =>
-          val leftExpr  = compileInst(prog, inst.out, end, input, pos, withCaps, capExpr, wholeMatch)
-          val rightExpr = compileInst(prog, inst.arg, end, input, pos, withCaps, capExpr, wholeMatch)
+          val leftExpr = compileInst(
+            prog,
+            inst.out,
+            end,
+            input,
+            pos,
+            withCaps,
+            capExpr,
+            wholeMatch
+          )
+          val rightExpr = compileInst(
+            prog,
+            inst.arg,
+            end,
+            input,
+            pos,
+            withCaps,
+            capExpr,
+            wholeMatch
+          )
           '{
             val lp = $leftExpr
             if lp >= 0 then lp else $rightExpr
@@ -229,38 +243,83 @@ object BacktrackingProgMatcher:
 
         case InstOp.RUNE | InstOp.RUNE1 =>
           val runeCheck = inst.matchRuneExpr
-          val nextPos   = '{ $pos + 1 }
-          val succExpr  = compileInst(prog, inst.out, end, input, nextPos, withCaps, capExpr, wholeMatch)
+          val nextPos = '{ $pos + 1 }
+          val succExpr = compileInst(
+            prog,
+            inst.out,
+            end,
+            input,
+            nextPos,
+            withCaps,
+            capExpr,
+            wholeMatch
+          )
           '{
-            if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt)) then
-              $succExpr
-            else
-              -1
+            if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
+            then $succExpr
+            else -1
           }
 
         case InstOp.LOOP =>
           '{
             def loop(posLoop: Int): Int =
               val nextVal = ${
-                compileInst(prog, inst.out, pc, input, '{ posLoop }, withCaps, capExpr, wholeMatch)
+                compileInst(
+                  prog,
+                  inst.out,
+                  pc,
+                  input,
+                  '{ posLoop },
+                  withCaps,
+                  capExpr,
+                  wholeMatch
+                )
               }
               if (nextVal == -1 || nextVal == posLoop) then
                 ${
-                  compileInst(prog, inst.arg, end, input, '{ posLoop }, withCaps, capExpr, wholeMatch)
+                  compileInst(
+                    prog,
+                    inst.arg,
+                    end,
+                    input,
+                    '{ posLoop },
+                    withCaps,
+                    capExpr,
+                    wholeMatch
+                  )
                 }
               else
                 val attempt = loop(nextVal)
                 if (attempt >= posLoop) then attempt
-                else ${
-                  compileInst(prog, inst.arg, end, input, '{ posLoop }, withCaps, capExpr, wholeMatch)
-                }
+                else
+                  ${
+                    compileInst(
+                      prog,
+                      inst.arg,
+                      end,
+                      input,
+                      '{ posLoop },
+                      withCaps,
+                      capExpr,
+                      wholeMatch
+                    )
+                  }
 
             loop($pos)
           }
 
         case InstOp.CAPTURE =>
-          val slot    = inst.arg
-          val nextExp = compileInst(prog, inst.out, end, input, pos, withCaps, capExpr, wholeMatch)
+          val slot = inst.arg
+          val nextExp = compileInst(
+            prog,
+            inst.out,
+            end,
+            input,
+            pos,
+            withCaps,
+            capExpr,
+            wholeMatch
+          )
 
           if (!withCaps) then
             '{
@@ -272,7 +331,7 @@ object BacktrackingProgMatcher:
             '{
               val oldVal = $capExpr(${ slotIdx })
               val curPos = $pos
-              val res    = $nextExp
+              val res = $nextExp
               if (res >= 0) then
                 $capExpr(${ slotIdx }) = curPos
                 res
@@ -285,41 +344,67 @@ object BacktrackingProgMatcher:
           quotes.reflect.report.errorAndAbort(s"Unsupported op: ${inst.op}")
 
   def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
-    '{
-      (input: CharSequence) =>
-        val result: Int =
-          ${
-            compileInst(prog, prog.start, prog.numInst, 'input, '{ 0 }, false, '{ null }, true)
-          }
-        result == input.length
+    '{ (input: CharSequence) =>
+      val result: Int =
+        ${
+          compileInst(
+            prog,
+            prog.start,
+            prog.numInst,
+            'input,
+            '{ 0 },
+            false,
+            '{ null },
+            true
+          )
+        }
+      result == input.length
     }
 
-  def genMatcherWithCaps(prog: Prog)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
-    '{
-      (input: CharSequence) =>
-        val groups  = Array.fill(${ Expr(prog.numCap) })(-1)
-        groups(0) = 0
+  def genMatcherWithCaps(prog: Prog)(using
+      Quotes
+  ): Expr[CharSequence => Option[Array[Int]]] =
+    '{ (input: CharSequence) =>
+      val groups = Array.fill(${ Expr(prog.numCap) })(-1)
+      groups(0) = 0
 
-        val result: Int =
-          ${
-            compileInst(prog, prog.start, prog.numInst, 'input, '{ 0 }, true, '{ groups }, true)
-          }
+      val result: Int =
+        ${
+          compileInst(
+            prog,
+            prog.start,
+            prog.numInst,
+            'input,
+            '{ 0 },
+            true,
+            '{ groups },
+            true
+          )
+        }
 
-        if (result == input.length) then Some(groups) else None
+      if (result == input.length) then Some(groups) else None
     }
 
   def genFind(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
-    '{
-      (input: CharSequence) =>
-        val groups  = Array.fill(${ Expr(prog.numCap) })(-1)
-        groups(0) = 0
+    '{ (input: CharSequence) =>
+      val groups = Array.fill(${ Expr(prog.numCap) })(-1)
+      groups(0) = 0
 
-        val result: Int =
-          ${
-            compileInst(prog, prog.start, prog.numInst, 'input, '{ 0 }, false, '{ null }, false)
-          }
+      val result: Int =
+        ${
+          compileInst(
+            prog,
+            prog.start,
+            prog.numInst,
+            'input,
+            '{ 0 },
+            false,
+            '{ null },
+            false
+          )
+        }
 
-        result >= 0
+      result >= 0
     }
 
   def matches(prog: Prog, input: CharSequence): Boolean = {

@@ -2,9 +2,9 @@ package oregano.internal
 
 import oregano.internal.Pattern.Cat
 
-final case class Frag(   // Keep immutable to control sharing
-  i: Int,                // Instruction index
-  out: Int = 0,          // Patch list
+final case class Frag( // Keep immutable to control sharing
+    i: Int, // Instruction index
+    out: Int = 0 // Patch list
 )
 
 class ProgramCompiler {
@@ -98,7 +98,7 @@ class ProgramCompiler {
     val f = newInst(InstOp.RUNE)
     val inst = progBuilder.getInst(f.i)
     // var flags = flags0 & RE2.FOLD_CASE
-    val flags = flags0 
+    val flags = flags0
     // if (runes.length != 1 || Unicode.simpleFold(runes(0)) == runes(0))
     //   flags &= ~RE2.FOLD_CASE
 
@@ -106,8 +106,8 @@ class ProgramCompiler {
     inst.arg = flags
 
     inst.op =
-    //   if ((flags & RE2.FOLD_CASE) == 0 && runes.length == 1)
-        // InstOp.RUNE1 else 
+      //   if ((flags & RE2.FOLD_CASE) == 0 && runes.length == 1)
+      // InstOp.RUNE1 else
       if (runes.length == 1)
         InstOp.RUNE1
       else if (runes.sameElements(Array(0, '\n' - 1, '\n' + 1, Utils.MAX_RUNE)))
@@ -128,26 +128,29 @@ class ProgramCompiler {
     case Pattern.Class(diet) =>
       // val runes = diet.toList.sorted
       val runes = Utils.dietToRanges(diet)
-      val pairs: Array[Int] = runes.sliding(2, 2).flatMap {
-          case List(lo, hi) => Seq(lo, hi)
-          case List(single) => Seq(single, single)
+      val pairs: Array[Int] = runes
+        .sliding(2, 2)
+        .flatMap {
+          case List(lo, hi)      => Seq(lo, hi)
+          case List(single)      => Seq(single, single)
           case List(_, _, _, _*) => Seq.empty
-          case Nil => Seq.empty
-      }.toArray
+          case Nil               => Seq.empty
+        }
+        .toArray
       rune(pairs, 0)
 
     case Pattern.Cat(Nil) =>
-        nop()
+      nop()
 
     case Pattern.Cat(patterns) =>
-        patterns.map(compile).reduce(cat)
+      patterns.map(compile).reduce(cat)
 
     case Pattern.Alt(left, right) =>
-        alt(compile(left), compile(right))
+      alt(compile(left), compile(right))
 
-    case Pattern.Rep0(pat, _) => 
-        val f = compile(pat)
-        star(f, false)
+    case Pattern.Rep0(pat, _) =>
+      val f = compile(pat)
+      star(f, false)
 
     // case Pattern.Capture(idx, pat) => compile(pat)
     case Pattern.Capture(idx, pat) =>
@@ -182,7 +185,7 @@ class ProgramCompiler {
 //       val ket = cap(re.cap << 1 | 1)
 //       cat(cat(bra, sub), ket)
 
-    // case RegexpOp.STAR   => star(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
+// case RegexpOp.STAR   => star(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
 //     case RegexpOp.PLUS   => plus(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
 //     case RegexpOp.QUEST  => quest(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
 

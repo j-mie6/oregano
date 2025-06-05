@@ -5,7 +5,7 @@ import cats.collections.{Diet, Range}
 
 given ToExpr[Range[Int]] with
   def apply(rng: Range[Int])(using Quotes): Expr[Range[Int]] =
-    '{ Range(${Expr(rng.start)}, ${Expr(rng.end)}) }
+    '{ Range(${ Expr(rng.start) }, ${ Expr(rng.end) }) }
 
 given ToExpr[Diet[Int]] with
   def apply(diet: Diet[Int])(using Quotes): Expr[Diet[Int]] =
@@ -19,7 +19,7 @@ sealed trait Pattern {
     case Pattern.Cat(ps) =>
       Pattern.Cat(ps.flatMap {
         case Pattern.Cat(subs) => subs.map(_.optimize)
-        case p => List(p.optimize)
+        case p                 => List(p.optimize)
       })
     case Pattern.Alt(p1, p2) =>
       Pattern.Alt(p1.optimize, p2.optimize)
@@ -28,25 +28,26 @@ sealed trait Pattern {
 }
 
 final case class PatternResult(
-  pattern: Pattern,
-  groupCount: Int,
-  flatControlFlow: Boolean,
-  numReps: Int
+    pattern: Pattern,
+    groupCount: Int,
+    flatControlFlow: Boolean,
+    numReps: Int
 )
 
 class PatternBuilder {
-  var nextGroup: Int = 1 // note that 1 is reserved for the whole match, as with other engines
-  var numReps = 0 // initially used for caching nested Rep0 loops safely: TODO: doesn't work and isn't neccessary, delete!
+  var nextGroup: Int =
+    1 // note that 1 is reserved for the whole match, as with other engines
+  var numReps =
+    0 // initially used for caching nested Rep0 loops safely: TODO: doesn't work and isn't neccessary, delete!
 
   def compile(regex: Regex): Pattern = regex match {
-    case Regex.Lit(c) => 
+    case Regex.Lit(c) =>
       Pattern.Lit(c)
 
     case Regex.Cat(rs) =>
-      rs.foldLeft(List.empty[Pattern]) {
-        case (acc, r) =>
-          val p = compile(r)
-          acc :+ p
+      rs.foldLeft(List.empty[Pattern]) { case (acc, r) =>
+        val p = compile(r)
+        acc :+ p
       } match {
         case ps => Pattern.Cat(ps)
       }
@@ -83,15 +84,15 @@ class PatternBuilder {
     case Regex.NonCapture(r) => compile(r)
 
     case Regex.Dot =>
-      // Dot matches any character except newline, there is a flag to change this, could be handled 
+      // Dot matches any character except newline, there is a flag to change this, could be handled
       // Could keep a Pattern.Dot, but for now, we can use a class that matches all characters except newline as is default
-      Pattern.Class(Regex.AllSet -- Diet.one('\n'.toInt)) 
+      Pattern.Class(Regex.AllSet -- Diet.one('\n'.toInt))
 
     case _ =>
       throw IllegalArgumentException(s"Unsupported regex: $regex")
   }
 
-  def build(regex: Regex): PatternResult = 
+  def build(regex: Regex): PatternResult =
     val pattern = compile(regex)
     val groupCount = nextGroup
     val flatControlFlow = Pattern.checkFlatControlFlow(pattern)
@@ -100,9 +101,9 @@ class PatternBuilder {
 }
 
 object Pattern {
-  final case class Lit(c: Int) extends Pattern 
-  final case class Cat(patterns: List[Pattern]) extends Pattern 
-  final case class Alt(left: Pattern, right: Pattern) extends Pattern 
+  final case class Lit(c: Int) extends Pattern
+  final case class Cat(patterns: List[Pattern]) extends Pattern
+  final case class Alt(left: Pattern, right: Pattern) extends Pattern
   final case class Class(diet: Diet[Int]) extends Pattern
   final case class Rep0(pat: Pattern, idx: Int) extends Pattern
   final case class Capture(groupIdx: Int, pat: Pattern) extends Pattern
@@ -113,18 +114,22 @@ object Pattern {
   def charClass(diet: Diet[Int]): Pattern = Class(diet)
   def rep0(pat: Pattern): Pattern = Rep0(pat, 0) // idx is not used here
 
-  def compile(regex: Regex, nextGroup: Int = 1): PatternResult = 
+  def compile(regex: Regex, nextGroup: Int = 1): PatternResult =
     val pat = new PatternBuilder()
     pat.build(regex)
 
-  def checkForNestedLoop(pat: Pattern, seenLoop: Boolean = false): Boolean = 
+  def checkForNestedLoop(pat: Pattern, seenLoop: Boolean = false): Boolean =
     pat match {
       case Pattern.Rep0(_, _) if seenLoop => true
-      case Pattern.Rep0(p, _) => checkForNestedLoop(p, true)
-      case Pattern.Alt(left, right) => checkForNestedLoop(left, seenLoop) || checkForNestedLoop(right, seenLoop)
+      case Pattern.Rep0(p, _)             => checkForNestedLoop(p, true)
+      case Pattern.Alt(left, right)       =>
+        checkForNestedLoop(left, seenLoop) || checkForNestedLoop(
+          right,
+          seenLoop
+        )
       case Pattern.Cat(ps) => ps.exists(p => checkForNestedLoop(p, seenLoop))
       case Pattern.Capture(_, p) => checkForNestedLoop(p, seenLoop)
-      case _ => false
+      case _                     => false
     }
 
   def checkFlatControlFlow(pat: Pattern): Boolean =
@@ -132,7 +137,9 @@ object Pattern {
     !checkForNestedLoop(pat)
 
   def compile(regex: String): PatternResult =
-    val re: Regex = parse(regex).getOrElse(throw IllegalArgumentException(s"Invalid regex: $regex"))
+    val re: Regex = parse(regex).getOrElse(
+      throw IllegalArgumentException(s"Invalid regex: $regex")
+    )
     compile(re)
 }
 
@@ -148,7 +155,6 @@ object Pattern {
     Pattern.concat(Pattern.lit('y'), Pattern.lit('z'))
   )
   println(p2)
-
 
   // check if nested loop detection works
   val PatternResult(unnestedLoop, _, _, _) = Pattern.compile("ab*c*")

@@ -6,10 +6,9 @@ abstract class Machine {
 
 type StepFn = (Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit
 
-
-/* 
+/*
 A Scala port of the RE2J machine, currently to help me reason about things
-*/
+ */
 class RE2Thread(var inst: Inst, var cap: Array[Int])
 
 object RE2Thread:
@@ -43,8 +42,7 @@ class RE2Queue(n: Int):
 
   def clearThread(pc: Int): Unit =
     val j = sparse(pc)
-    if j < size && densePcs(j) == pc then
-      denseThreads(j) = null
+    if j < size && densePcs(j) == pc then denseThreads(j) = null
 
   def clear(): Unit = size = 0
 
@@ -61,9 +59,8 @@ class RE2Machine(val prog: Prog) extends Machine:
   // note: re2 will match twice, only tracking groups if .group is called: this is an API decision, for simplicity we track all groups
   // if desired, can be set to 2 to prevent tracking all groups
   // var ncap = 2
-  var ncap: Int = prog.numCap 
+  var ncap: Int = prog.numCap
   var anchorEnd = true
-
 
   // used if recycling machines across mutliple expressions
   // def init(ncap: Int): Unit =
@@ -106,12 +103,17 @@ class RE2Machine(val prog: Prog) extends Machine:
     q.clear()
 
   def free(t: RE2Thread): Unit =
-    if pool.length <= poolSize then
-      pool = Array.copyOf(pool, pool.length * 2)
+    if pool.length <= poolSize then pool = Array.copyOf(pool, pool.length * 2)
     pool(poolSize) = t
     poolSize += 1
 
-  def add(pc: Int, pos: Int, cap: Array[Int], q: RE2Queue, t: RE2Thread): RE2Thread =
+  def add(
+      pc: Int,
+      pos: Int,
+      cap: Array[Int],
+      q: RE2Queue,
+      t: RE2Thread
+  ): RE2Thread =
     if pc == 0 then return t
     if q.contains(pc) then return t
 
@@ -136,10 +138,10 @@ class RE2Machine(val prog: Prog) extends Machine:
           add(inst.out, pos, cap, q, null)
           cap(inst.arg) = old
           t
-        else
-          add(inst.out, pos, cap, q, t)
+        else add(inst.out, pos, cap, q, t)
 
-      case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL =>
+      case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY |
+          InstOp.RUNE_ANY_NOT_NL =>
         val thread = if t == null then alloc(inst) else { t.inst = inst; t }
         if ncap > 0 && (thread.cap ne cap) then
           Array.copy(cap, 0, thread.cap, 0, ncap)
@@ -149,12 +151,11 @@ class RE2Machine(val prog: Prog) extends Machine:
       case _ =>
         throw new IllegalStateException(s"bad inst: ${inst.op}")
 
-
   def step(
-    runq: RE2Queue,
-    nextq: RE2Queue,
-    pos: Int,
-    rune: Int,
+      runq: RE2Queue,
+      nextq: RE2Queue,
+      pos: Int,
+      rune: Int
   ): Boolean =
     var matchedHere = false
     var j = 0
@@ -190,8 +191,7 @@ class RE2Machine(val prog: Prog) extends Machine:
           case _ =>
             throw new IllegalStateException(s"bad inst: ${inst.op}")
 
-        if addNext then
-          t = add(inst.out, pos + 1, t.cap, nextq, t)
+        if addNext then t = add(inst.out, pos + 1, t.cap, nextq, t)
 
         if t != null then
           free(t)
@@ -222,15 +222,14 @@ class RE2Machine(val prog: Prog) extends Machine:
       // Only advance position if not at EOF
       if pos < input.length then pos += 1
       val tmp = runq; runq = nextq; nextq = tmp
-    
+
     println(matchcap.mkString(","))
-    if anchorEnd then
-      matchcap(1) == input.length
-    else
-      matchcap(1) != -1
+    if anchorEnd then matchcap(1) == input.length
+    else matchcap(1) != -1
 
 @main def testRE2Machine(): Unit =
-  val PatternResult(nestPattern, nestPatternCaps, _, _) = Pattern.compile("((ab)*|(cd)*)*")
+  val PatternResult(nestPattern, nestPatternCaps, _, _) =
+    Pattern.compile("((ab)*|(cd)*)*")
   val prog = ProgramCompiler.compileRegexp(nestPattern, nestPatternCaps)
   val machine = RE2Machine(prog)
   println(machine.matches("abababcdcdcdababab"))
@@ -240,4 +239,3 @@ class RE2Machine(val prog: Prog) extends Machine:
   machine.anchorEnd = false
   println(machine.matches("ababyabadabadoo"))
   println(machine.matches("abababcdcdc"))
-

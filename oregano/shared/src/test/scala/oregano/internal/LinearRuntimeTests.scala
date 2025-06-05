@@ -90,11 +90,11 @@ class RuntimeLinearMatcherTests_Grouping extends AnyFlatSpec {
   it should "reject invalid strings" in {
     val invalidInputs = Table(
       "input",
-      "abc",  
-      "c",    
-      "d0",   
-      "aac",  
-      "a0"    
+      "abc",
+      "c",
+      "d0",
+      "aac",
+      "a0"
     )
 
     forAll(invalidInputs) { str =>
@@ -119,7 +119,7 @@ class RuntimeLinearMatcherTests_ComplexExpression extends AnyFlatSpec {
       "abeg2",
       "cdeg5",
       "abef7",
-      "ef0", 
+      "ef0",
       "cdcdeg3"
     )
 
@@ -133,14 +133,14 @@ class RuntimeLinearMatcherTests_ComplexExpression extends AnyFlatSpec {
   it should "reject invalid strings" in {
     val invalidInputs = Table(
       "input",
-      "abe",       
-      "abef",      
-      "abgh5",     
+      "abe",
+      "abef",
+      "abgh5",
       "xyzef0",
       "cdfg3",
-      "abeg",      
-      "eg",        
-      "ab9"        
+      "abeg",
+      "eg",
+      "ab9"
     )
 
     forAll(invalidInputs) { str =>
@@ -249,16 +249,16 @@ class RuntimeLinearMatcherTests_NestedAltRep extends AnyFlatSpec {
 
   val cases = Table(
     ("input", "expectedCaps"),
-    ("e", Some(Array(0, 1, 0, 0, -1, -1, -1, -1))),                   
-    ("ae", Some(Array(0, 2, 0, 1, 0, 1, 0, 1))),                    
-    ("abe", Some(Array(0, 3, 0, 2, 1, 2, 0, 1))),                   
-    ("cde", Some(Array(0, 3, 0, 2, 0, 2, -1, -1))),                   
-    ("ababe", Some(Array(0, 5, 0, 4, 3, 4, 2, 3))),                 
-    ("abcdcde", Some(Array(0, 7, 0, 6, 4, 6, 0, 1))),               
-    ("ababcdcde", Some(Array(0, 9, 0, 8, 6, 8, 2, 3))),             
-    ("", None),                                               
-    ("ab", None),                                             
-    ("abc", None)                                             
+    ("e", Some(Array(0, 1, 0, 0, -1, -1, -1, -1))),
+    ("ae", Some(Array(0, 2, 0, 1, 0, 1, 0, 1))),
+    ("abe", Some(Array(0, 3, 0, 2, 1, 2, 0, 1))),
+    ("cde", Some(Array(0, 3, 0, 2, 0, 2, -1, -1))),
+    ("ababe", Some(Array(0, 5, 0, 4, 3, 4, 2, 3))),
+    ("abcdcde", Some(Array(0, 7, 0, 6, 4, 6, 0, 1))),
+    ("ababcdcde", Some(Array(0, 9, 0, 8, 6, 8, 2, 3))),
+    ("", None),
+    ("ab", None),
+    ("abc", None)
   )
 
   it should "match expected capture groups for each input" in {

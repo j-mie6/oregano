@@ -8,7 +8,11 @@ given ToExpr[Prog] with
       Expr.ofSeq(prog.insts.toSeq.map(Expr(_)))
 
     '{
-      Prog(IArray.from($instExprs), ${ Expr(prog.start) }, ${ Expr(prog.numCap) })
+      Prog(
+        IArray.from($instExprs),
+        ${ Expr(prog.start) },
+        ${ Expr(prog.numCap) }
+      )
     }
   }
 
@@ -29,8 +33,7 @@ final case class Prog(insts: IArray[Inst], start: Int, numCap: Int) {
   }
 
   def appendCodePoint(sb: StringBuilder, codePoint: Int): Unit =
-    if Character.isBmpCodePoint(codePoint) then
-      sb.append(codePoint.toChar)
+    if Character.isBmpCodePoint(codePoint) then sb.append(codePoint.toChar)
     else
       sb.append(Character.highSurrogate(codePoint))
       sb.append(Character.lowSurrogate(codePoint))
@@ -43,9 +46,10 @@ final case class Prog(insts: IArray[Inst], start: Int, numCap: Int) {
       return ("", i.op == InstOp.MATCH)
 
     while (
-      InstOp.isRuneOp(i.op) &&
-      i.runes.length == 1
-    ) do
+        InstOp.isRuneOp(i.op) &&
+        i.runes.length == 1
+      )
+    do
       appendCodePoint(sb, i.runes(0))
       i = skipNop(i.out)
 
@@ -59,10 +63,10 @@ final case class Prog(insts: IArray[Inst], start: Int, numCap: Int) {
     while true do
       val i = insts(pc)
       i.op match
-        case InstOp.EMPTY_WIDTH => flag |= i.arg; pc = i.out
-        case InstOp.FAIL        => return -1
+        case InstOp.EMPTY_WIDTH          => flag |= i.arg; pc = i.out
+        case InstOp.FAIL                 => return -1
         case InstOp.CAPTURE | InstOp.NOP => pc = i.out
-        case _ => return flag
+        case _                           => return flag
     flag
   }
 
@@ -72,9 +76,11 @@ final case class Prog(insts: IArray[Inst], start: Int, numCap: Int) {
   }
 
   override def toString: String = {
-    insts.zipWithIndex.map { (inst, pc) =>
-      val mark = if pc == start then "*" else ""
-      f"$pc$mark%-3s  ${inst.toString}"
-    }.mkString("\n")
+    insts.zipWithIndex
+      .map { (inst, pc) =>
+        val mark = if pc == start then "*" else ""
+        f"$pc$mark%-3s  ${inst.toString}"
+      }
+      .mkString("\n")
   }
 }

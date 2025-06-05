@@ -1,9 +1,7 @@
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks.*
 import oregano.internal.StagedMatchers.{stagedProg, stagedProgWithCaps}
-
 
 class StagedProgMatcherTests extends AnyFlatSpec {
 
@@ -18,7 +16,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
       "abababababbc",
       "bc",
       "abababbc",
-      "abbc",
+      "abbc"
     )
 
     forAll(validFirstAlt) { str =>
@@ -79,11 +77,11 @@ class StagedProgMatcherTests extends AnyFlatSpec {
   it should "reject invalid strings" in {
     val invalidInputs = Table(
       "input",
-      "abc",  
-      "c",    
-      "d0",   
-      "aac",  
-      "a0"    
+      "abc",
+      "c",
+      "d0",
+      "aac",
+      "a0"
     )
 
     forAll(invalidInputs) { str =>
@@ -92,7 +90,6 @@ class StagedProgMatcherTests extends AnyFlatSpec {
       }
     }
   }
-
 
   val matcherWithBigClass = stagedProg("[a-zA-Z0-9_.+-]*")
 
@@ -116,9 +113,9 @@ class StagedProgMatcherTests extends AnyFlatSpec {
   it should "reject invalid strings" in {
     val invalidInputs = Table(
       "input",
-      "abc123!",  
-      "user@name", 
-      "tag#123",   
+      "abc123!",
+      "user@name",
+      "tag#123",
       "invalid space"
     )
 
@@ -141,7 +138,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
       "abeg2",
       "cdeg5",
       "abef7",
-      "ef0", 
+      "ef0",
       "cdcdeg3"
     )
 
@@ -155,14 +152,14 @@ class StagedProgMatcherTests extends AnyFlatSpec {
   it should "reject invalid strings" in {
     val invalidInputs = Table(
       "input",
-      "abe",       
-      "abef",      
-      "abgh5",     
+      "abe",
+      "abef",
+      "abgh5",
       "xyzef0",
       "cdfg3",
-      "abeg",      
-      "eg",        
-      "ab9"        
+      "abeg",
+      "eg",
+      "ab9"
     )
 
     forAll(invalidInputs) { str =>
@@ -229,7 +226,7 @@ class StagedProgMatcherTests extends AnyFlatSpec {
       ("abbbc", Some(Array(0, 5, 0, 3, 0, 1, -1, -1))),
       ("aaaaabaababbc", None),
       ("aaaaabc", Some(Array(0, 7, 0, 5, 0, 5, -1, -1))),
-      ("bc", Some(Array(0, 2, 0, 0, 0, 0, -1, -1))), 
+      ("bc", Some(Array(0, 2, 0, 0, 0, 0, -1, -1))),
       ("abc", Some(Array(0, 3, 0, 1, 0, 1, -1, -1))),
       ("def", Some(Array(0, 3, -1, -1, -1, -1, 0, 3))),
       ("", None),
@@ -261,16 +258,16 @@ class StagedProgMatcherTests extends AnyFlatSpec {
   it should "match expected capture groups for each input" in {
     val cases = Table(
       ("input", "expectedCaps"),
-      ("e", Some(Array(0, 1, 0, 0, -1, -1, -1, -1))),                   
-      ("ae", Some(Array(0, 2, 0, 1, 0, 1, 0, 1))),                    
-      ("abe", Some(Array(0, 3, 0, 2, 1, 2, 0, 1))),                   
-      ("cde", Some(Array(0, 3, 0, 2, 0, 2, -1, -1))),                   
-      ("ababe", Some(Array(0, 5, 0, 4, 3, 4, 2, 3))),                 
-      ("abcdcde", Some(Array(0, 7, 0, 6, 4, 6, 0, 1))),               
-      ("ababcdcde", Some(Array(0, 9, 0, 8, 6, 8, 2, 3))),             
-      ("", None),                                               
-      ("ab", None),                                             
-      ("abc", None)                                             
+      ("e", Some(Array(0, 1, 0, 0, -1, -1, -1, -1))),
+      ("ae", Some(Array(0, 2, 0, 1, 0, 1, 0, 1))),
+      ("abe", Some(Array(0, 3, 0, 2, 1, 2, 0, 1))),
+      ("cde", Some(Array(0, 3, 0, 2, 0, 2, -1, -1))),
+      ("ababe", Some(Array(0, 5, 0, 4, 3, 4, 2, 3))),
+      ("abcdcde", Some(Array(0, 7, 0, 6, 4, 6, 0, 1))),
+      ("ababcdcde", Some(Array(0, 9, 0, 8, 6, 8, 2, 3))),
+      ("", None),
+      ("ab", None),
+      ("abc", None)
     )
 
     forAll(cases) { (input, expectedOpt) =>
@@ -290,4 +287,3 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 }
-
