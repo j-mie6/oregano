@@ -117,38 +117,17 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
         case IArray(single) => (single, single)
       }.toList
 
-      if pairs.length <= 4 then
-        '{
-          (r: Int) => ${
-            val conditions = pairs.map { case (lo, hi) =>
-              if lo == hi then
-                '{ r == ${Expr(lo)} }
-              else
-                '{ r >= ${Expr(lo)} && r <= ${Expr(hi)} }
-            }
-            conditions.reduceLeft((a, b) => '{ $a || $b })
+      '{
+        (r: Int) => ${
+          val conditions = pairs.map { case (lo, hi) =>
+            if lo == hi then
+              '{ r == ${Expr(lo)} }
+            else
+              '{ r >= ${Expr(lo)} && r <= ${Expr(hi)} }
           }
+          conditions.reduceLeft((a, b) => '{ $a || $b })
         }
-      else
-        // Fallback: binary search over ranges
-        val pairsArgsExpr = Varargs(pairs.map { case (lo, hi) => Expr.ofTuple((Expr(lo), Expr(hi))) })
-        '{
-          val pairs = IArray($pairsArgsExpr*)
-          (r: Int) =>
-            var ret = false
-            var lo = 0
-            var hi = pairs.length
-            while lo < hi do
-              val m = lo + (hi - lo) / 2
-              val (rlo, rhi) = pairs(m)
-              if r < rlo then hi = m
-              else if r > rhi then lo = m + 1
-              else {
-                ret = true
-                lo = hi
-              }
-            ret
-        }
+      }
 
   private def escapeRunes(runes: IArray[Int]): String =
     val sb = new StringBuilder("\"")

@@ -53,7 +53,7 @@ private object parsers {
         val numeric = 'x' ~> hexCodeEscX | '0' ~> octCode | 'u' ~> hexFixedEscU
         // `\cx`: the control character corresponding to x (@-?) -- space is somehow valid for this, but don't know what to
         val control = 'c' ~> empty
-        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b, '.' -> '.'.toInt).toList.map(_ as _)*)
+        val single  = choice(Map('t' -> 0x00009, 'n' -> 0x0000a, 'r' -> 0x0000d, 'f' -> 0x0000c, 'a' -> 0x00007, 'e' -> 0x0001b, '.' -> '.'.toInt).toList.map(_ as _)*) // probably a nicer way of escaping dot
         atomic('\\' ~> (single | numeric | control | '\\'.map(_.toInt)))
     }
     private lazy val setEsc: Parsley[Diet[Int]] = empty

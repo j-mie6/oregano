@@ -67,6 +67,7 @@ class PatternBuilder {
 
     // Given we use a shared `p`, capture indicies are propogated safely so I believe this to be safe
     // That being said, not doing this could yield a more terse Prog, but I don't have time
+    // I'd expect the more terse Prog to be more performant
     case Regex.Rep1(r) =>
       val p = compile(r)
       val idx = numReps
@@ -82,7 +83,9 @@ class PatternBuilder {
     case Regex.NonCapture(r) => compile(r)
 
     case Regex.Dot =>
-      Pattern.Class(Regex.AllSet -- Diet.one('\n'.toInt)) // Dot matches any character except newline, there is a flag to change this
+      // Dot matches any character except newline, there is a flag to change this, could be handled 
+      // Could keep a Pattern.Dot, but for now, we can use a class that matches all characters except newline as is default
+      Pattern.Class(Regex.AllSet -- Diet.one('\n'.toInt)) 
 
     case _ =>
       throw IllegalArgumentException(s"Unsupported regex: $regex")
@@ -91,9 +94,9 @@ class PatternBuilder {
   def build(regex: Regex): PatternResult = 
     val pattern = compile(regex)
     val groupCount = nextGroup
-    val stageable = Pattern.checkFlatControlFlow(pattern)
+    val flatControlFlow = Pattern.checkFlatControlFlow(pattern)
     val numReps = this.numReps + 1
-    PatternResult(pattern, groupCount, stageable, numReps)
+    PatternResult(pattern, groupCount, flatControlFlow, numReps)
 }
 
 object Pattern {
@@ -110,43 +113,7 @@ object Pattern {
   def charClass(diet: Diet[Int]): Pattern = Class(diet)
   def rep0(pat: Pattern): Pattern = Rep0(pat, 0) // idx is not used here
 
-  // Do we need this? could we not use Regex.Lit, Regex.Cat, Regex.Alt etc directly?
-  // Might be worth having when optimising, for methods etc. but not sure
   def compile(regex: Regex, nextGroup: Int = 1): PatternResult = 
-    // regex match 
-    //   case Regex.Lit(c) => 
-    //     (Pattern.Lit(c), nextGroup)
-
-    //   case Regex.Cat(rs) =>
-    //     rs.foldLeft((List.empty[Pattern], nextGroup)) {
-    //       case ((acc, g), r) =>
-    //         val (p, g2) = compile(r, g)
-    //         (acc :+ p, g2)
-    //     } match {
-    //       case (ps, g) => (Pattern.Cat(ps), g)
-    //     }
-
-    //   case Regex.Alt(r1, r2) =>
-    //     val (p1, g1) = compile(r1, nextGroup)
-    //     val (p2, g2) = compile(r2, g1)
-    //     (Pattern.Alt(p1, p2), g2)
-
-    //   case Regex.Class(d) =>
-    //     (Pattern.Class(d), nextGroup)
-
-    //   case Regex.Rep0(r) =>
-    //     val (p, g) = compile(r, nextGroup)
-    //     (Pattern.Rep0(p), g)
-
-    //   case Regex.Capture(r) =>
-    //     val groupId = nextGroup
-    //     val (p, g2) = compile(r, nextGroup + 1)
-    //     (Pattern.Capture(groupId, p), g2)
-
-    //   case Regex.NonCapture(r) => compile(r, nextGroup)
-
-    //   case _ =>
-    //     throw IllegalArgumentException(s"Unsupported regex: $regex")
     val pat = new PatternBuilder()
     pat.build(regex)
 
