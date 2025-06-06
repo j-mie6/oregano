@@ -204,9 +204,10 @@ def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
 //     }
 
 object CPSMatcher:
-  private def compileSubtree(
+  private def compile(
       p: Pattern,
       input: Expr[CharSequence],
+      noCaps: Int, 
       cont: Expr[Int => Int],
       withCaps: Boolean,
       groupsExpr: Expr[Array[Int]]
@@ -231,12 +232,12 @@ object CPSMatcher:
 
       case Pattern.Cat(ps) =>
         ps.foldRight(cont) { (subPattern, nextCont) =>
-          compileSubtree(subPattern, input, nextCont, withCaps, groupsExpr)
+          compile(subPattern, input, noCaps, nextCont, withCaps, groupsExpr)
         }
 
       case Pattern.Alt(p1, p2) =>
-        val leftExpr = compileSubtree(p1, input, cont, withCaps, groupsExpr)
-        val rightExpr = compileSubtree(p2, input, cont, withCaps, groupsExpr)
+        val leftExpr = compile(p1, input, noCaps, cont, withCaps, groupsExpr)
+        val rightExpr = compile(p2, input, noCaps, cont, withCaps, groupsExpr)
         '{ (pos: Int) =>
           val lp = $leftExpr(pos)
           if lp >= 0 then lp else $rightExpr(pos)
@@ -246,9 +247,10 @@ object CPSMatcher:
         '{
           def self(pos: Int): Int =
             val step = ${
-              compileSubtree(
+              compile(
                 sub,
                 input,
+                noCaps,
                 '{ (next: Int) =>
                   if next != pos then self(next) else -1
                 },
@@ -262,7 +264,8 @@ object CPSMatcher:
         }
 
       case Pattern.Capture(idx, sub) =>
-        if (!withCaps) then compileSubtree(sub, input, cont, false, '{ null })
+        if (!withCaps || idx > noCaps) then 
+          compile(sub, input, noCaps, cont, false, '{ null })
         else
           val endSlotIdx: Expr[Int] = Expr(2 * idx + 1)
           val cont1: Expr[Int => Int] =
@@ -278,7 +281,7 @@ object CPSMatcher:
             }
 
           val inner: Expr[Int => Int] =
-            compileSubtree(sub, input, cont1, true, groupsExpr)
+            compile(sub, input, noCaps, cont1, true, groupsExpr)
 
           val startSlotIdx: Expr[Int] = Expr(2 * idx)
           '{ (pos: Int) =>
@@ -299,7 +302,7 @@ object CPSMatcher:
       val cont: Int => Int = (i: Int) => if i == input.length then i else -1
 
       val matcherFn: Int => Int =
-        ${ compileSubtree(pattern, 'input, '{ cont }, false, '{ null }) }
+        ${ compile(pattern, 'input, 0, '{ cont }, false, '{ null }) }
 
       matcherFn(0) == input.length
     }
@@ -315,7 +318,7 @@ object CPSMatcher:
       val cont: Int => Int = (i: Int) => if i == inputLen then i else -1
 
       val matcherFn: Int => Int =
-        ${ compileSubtree(pattern, 'input, '{ cont }, true, '{ groups }) }
+        ${ compile(pattern, 'input, numGroups, '{ cont }, true, '{ groups }) }
 
       val matched = matcherFn(0)
       if matched == inputLen then
@@ -330,7 +333,7 @@ object CPSMatcher:
     '{ (input: CharSequence) =>
       val matcherFn: Int => Int =
         ${
-          compileSubtree(pattern, 'input, '{ (i: Int) => i }, false, '{ null })
+          compile(pattern, 'input, 0, '{ (i: Int) => i }, false, '{ null })
         }
 
       matcherFn(0) >= 0

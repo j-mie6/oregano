@@ -178,11 +178,12 @@ object BacktrackingProgMatcher:
 //         if result >= 0 then Some(groups) else None
 //     }
 
-  private def compileInst(
+  private def compile(
       prog: Prog,
       pc: Int,
       end: Int,
       input: Expr[CharSequence],
+      noCaps: Int,
       pos: Expr[Int],
       withCaps: Boolean,
       capExpr: Expr[Array[Int]],
@@ -216,21 +217,23 @@ object BacktrackingProgMatcher:
           '{ -1 }
 
         case InstOp.ALT =>
-          val leftExpr = compileInst(
+          val leftExpr = compile(
             prog,
             inst.out,
             end,
             input,
+            noCaps, 
             pos,
             withCaps,
             capExpr,
             wholeMatch
           )
-          val rightExpr = compileInst(
+          val rightExpr = compile(
             prog,
             inst.arg,
             end,
             input,
+            noCaps, 
             pos,
             withCaps,
             capExpr,
@@ -244,11 +247,12 @@ object BacktrackingProgMatcher:
         case InstOp.RUNE | InstOp.RUNE1 =>
           val runeCheck = inst.matchRuneExpr
           val nextPos = '{ $pos + 1 }
-          val succExpr = compileInst(
+          val succExpr = compile(
             prog,
             inst.out,
             end,
             input,
+            noCaps,
             nextPos,
             withCaps,
             capExpr,
@@ -264,11 +268,12 @@ object BacktrackingProgMatcher:
           '{
             def loop(posLoop: Int): Int =
               val nextVal = ${
-                compileInst(
+                compile(
                   prog,
                   inst.out,
                   pc,
                   input,
+                  noCaps,
                   '{ posLoop },
                   withCaps,
                   capExpr,
@@ -277,11 +282,12 @@ object BacktrackingProgMatcher:
               }
               if (nextVal == -1 || nextVal == posLoop) then
                 ${
-                  compileInst(
+                  compile(
                     prog,
                     inst.arg,
                     end,
                     input,
+                    noCaps,
                     '{ posLoop },
                     withCaps,
                     capExpr,
@@ -293,11 +299,12 @@ object BacktrackingProgMatcher:
                 if (attempt >= posLoop) then attempt
                 else
                   ${
-                    compileInst(
+                    compile(
                       prog,
                       inst.arg,
                       end,
                       input,
+                      noCaps,
                       '{ posLoop },
                       withCaps,
                       capExpr,
@@ -310,18 +317,19 @@ object BacktrackingProgMatcher:
 
         case InstOp.CAPTURE =>
           val slot = inst.arg
-          val nextExp = compileInst(
+          val nextExp = compile(
             prog,
             inst.out,
             end,
             input,
+            noCaps, 
             pos,
             withCaps,
             capExpr,
             wholeMatch
           )
 
-          if (!withCaps) then
+          if (!withCaps || slot >= noCaps) then
             '{
               val res = $nextExp
               if (res >= 0) then res else -1
@@ -347,11 +355,12 @@ object BacktrackingProgMatcher:
     '{ (input: CharSequence) =>
       val result: Int =
         ${
-          compileInst(
+          compile(
             prog,
             prog.start,
             prog.numInst,
             'input,
+            0,
             '{ 0 },
             false,
             '{ null },
@@ -370,11 +379,12 @@ object BacktrackingProgMatcher:
 
       val result: Int =
         ${
-          compileInst(
+          compile(
             prog,
             prog.start,
             prog.numInst,
             'input,
+            prog.numCap,
             '{ 0 },
             true,
             '{ groups },
@@ -387,16 +397,14 @@ object BacktrackingProgMatcher:
 
   def genFind(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
     '{ (input: CharSequence) =>
-      val groups = Array.fill(${ Expr(prog.numCap) })(-1)
-      groups(0) = 0
-
       val result: Int =
         ${
-          compileInst(
+          compile(
             prog,
             prog.start,
             prog.numInst,
             'input,
+            0,
             '{ 0 },
             false,
             '{ null },
