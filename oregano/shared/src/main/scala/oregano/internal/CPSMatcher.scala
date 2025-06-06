@@ -33,181 +33,11 @@ def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
   }
 }
 
-// object CPSMatcher:
-//   def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] =
-//     def compile(
-//       p: Pattern,
-//       input: Expr[CharSequence],
-//       cont: Expr[Int => Int]
-//     ): Expr[Int => Int] = p match
-//       case Pattern.Lit(c) =>
-//         '{
-//           (pos: Int) =>
-//             if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
-//               $cont(pos + 1)
-//             else -1
-//         }
-
-//       case Pattern.Cat(ps) =>
-//         ps.foldRight(cont)((p, acc) => compile(p, input, acc))
-
-//       case Pattern.Alt(p1, p2) =>
-//         val left  = compile(p1, input, cont)
-//         val right = compile(p2, input, cont)
-//         '{
-//           (pos: Int) =>
-//             val lp = $left(pos)
-//             if lp >= 0 then lp else $right(pos)
-//         }
-
-//       case Pattern.Class(diet) =>
-//         val runeCheckExpr = dietContains(diet)
-//         '{
-//           (pos: Int) =>
-//             if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
-//               $cont(pos + 1)
-//             else -1
-//         }
-
-//       case Pattern.Rep0(sub, _) =>
-//         '{
-//           def self(pos: Int): Int =
-//             val step = ${
-//               compile(sub, input, '{
-//                 (next: Int) =>
-//                   if next != pos then self(next) else -1
-//               })
-//             }
-//             val r = step(pos)
-//             if r >= 0 then r else ${ cont }(pos)
-//           self
-//         }
-
-//       case Pattern.Capture(idx, sub) =>
-//         val inner = compile(sub, input, cont)
-//         '{
-//           (pos: Int) =>
-//             $inner(pos)
-//         }
-
-//     '{
-//       (input: CharSequence) =>
-//         val cont = (i: Int) => {
-//           if i == input.length then
-//             i
-//           else -1
-//         }
-//         val matcherFn = ${ compile(pattern, 'input, 'cont) }
-//         if matcherFn(0) >= 0 then
-//           true
-//         else false
-//     }
-
-//   // using explicit call-stack tracking a la java.util.regex
-//   def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
-//     def compile(
-//       p: Pattern,
-//       input: Expr[CharSequence],
-//       groups: Expr[Array[Int]],
-//       cont: Expr[Int => Int]
-//     ): Expr[Int => Int] = p match
-//       case Pattern.Lit(c) =>
-//         '{
-//           (pos: Int) =>
-//             if pos < $input.length && $input.charAt(pos) == ${Expr(c.toChar)} then
-//               $cont(pos + 1)
-//             else -1
-//         }
-
-//       case Pattern.Class(diet) =>
-//         val runeCheckExpr = dietContains(diet)
-//         '{
-//           (pos: Int) =>
-//             if pos < $input.length && ${Expr.betaReduce('{ $runeCheckExpr($input.charAt(pos).toInt) })} then
-//               $cont(pos + 1)
-//             else -1
-//         }
-
-//       case Pattern.Cat(ps) =>
-//         ps.foldRight(cont)((sub, acc) => compile(sub, input, groups, acc))
-
-//       case Pattern.Alt(l, r) =>
-//         val left  = compile(l, input, groups, cont)
-//         val right = compile(r, input, groups, cont)
-//         '{
-//           (pos: Int) =>
-//             val lp = $left(pos)
-//             if lp >= 0 then lp
-//             else {
-//               $right(pos)
-//             }
-//         }
-
-//       case Pattern.Rep0(sub, _) =>
-//         '{
-//           def self(pos: Int): Int =
-//             val step = ${
-//               compile(sub, input, groups, '{
-//                 (next: Int) =>
-//                   if next != pos then self(next) else -1
-//               })
-//             }
-//             val out = step(pos)
-//             if out >= 0 then out
-//             else {
-//               $cont(pos)
-//             }
-//           self
-//         }
-
-//       case Pattern.Capture(idx, sub) =>
-//         val inner = compile(sub, input, groups, '{
-//           (endPos: Int) =>
-//             val savedEnd = $groups(2 * ${Expr(idx)} + 1)
-//             $groups(2 * ${Expr(idx)} + 1) = endPos
-//             val res = $cont(endPos)
-//             if res >= 0 then res
-//             else {
-//               $groups(2 * ${Expr(idx)} + 1) = savedEnd
-//               -1
-//             }
-//         })
-//         '{
-//           (pos: Int) =>
-//             val savedStart = $groups(2 * ${Expr(idx)})
-//             $groups(2 * ${Expr(idx)}) = pos
-//             val res = $inner(pos)
-//             if res >= 0 then res
-//             else {
-//               $groups(2 * ${Expr(idx)}) = savedStart
-//               -1
-//             }
-//         }
-
-//     '{
-//       (input: CharSequence) =>
-//         val inputLen = input.length
-//         val groups = Array.fill(${Expr(numGroups * 2)})(-1)
-//         groups(0) = 0
-
-//         val cont = (i: Int) =>
-//           if i == inputLen then i else -1
-
-//         val matcherFn = ${ compile(pattern, 'input, 'groups, 'cont) }
-
-//         val matched = matcherFn(0)
-//         if matched >= 0 then {
-//           groups(1) = matched // end of match
-//           // println(s"Success: ${groups.mkString(", ")}")
-//           Some(groups)
-//         } else None
-//     }
-
 object CPSMatcher:
   private def compile(
       p: Pattern,
       input: Expr[CharSequence],
-      noCaps: Int, 
+      noCaps: Int,
       cont: Expr[Int => Int],
       withCaps: Boolean,
       groupsExpr: Expr[Array[Int]]
@@ -264,7 +94,7 @@ object CPSMatcher:
         }
 
       case Pattern.Capture(idx, sub) =>
-        if (!withCaps || idx > noCaps) then 
+        if (!withCaps || idx > noCaps) then
           compile(sub, input, noCaps, cont, false, '{ null })
         else
           val endSlotIdx: Expr[Int] = Expr(2 * idx + 1)
