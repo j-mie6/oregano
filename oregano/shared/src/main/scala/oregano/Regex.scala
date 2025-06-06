@@ -11,7 +11,8 @@ abstract class Regex[Match] {
   def matches(input: CharSequence): Boolean
   def matchesWithCaps(input: CharSequence): Option[Array[Int]]
   def matchesLinear(input: CharSequence): Boolean
-  def unapplySeq(input: CharSequence): Option[Match]
+  def find(input: CharSequence): Boolean 
+  def unapplySeq(input: CharSequence): Option[List[String]]
 }
 
 object Regex {
@@ -22,10 +23,13 @@ object Regex {
     private val pattern = patternResult.pattern
     private val numGroups = patternResult.groupCount
     private val prog = internal.ProgramCompiler.compileRegexp(pattern, numGroups)
+    private val re2Machine = internal.RE2Machine(prog)
     def matches(input: CharSequence): Boolean = compiled.matches(input)
     def matchesWithCaps(input: CharSequence): Option[Array[Int]] = ???
-    def matchesLinear(input: CharSequence): Boolean = ???
-    def matchesBacktrack(input: CharSequence): Boolean = internal.BacktrackingProgMatcher.matches(prog, input )
+    def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
+
+    def find(input: CharSequence): Boolean = ???
+    
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }
 }
