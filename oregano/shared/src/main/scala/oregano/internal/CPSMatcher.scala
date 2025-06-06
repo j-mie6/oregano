@@ -157,7 +157,7 @@ object CPSMatcher:
       else None
     }
 
-  def genFinderPattern(pattern: Pattern, numGroups: Int)(using
+  def genPrefixFinderPattern(pattern: Pattern, numGroups: Int)(using
       Quotes
   ): Expr[(Int, CharSequence) => Int] =
     '{ (startPos: Int, input: CharSequence) =>

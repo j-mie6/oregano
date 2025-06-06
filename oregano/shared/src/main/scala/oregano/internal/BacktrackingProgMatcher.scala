@@ -220,7 +220,7 @@ object BacktrackingProgMatcher:
       if (result == input.length) then Some(groups) else None
     }
 
-  def genFind(prog: Prog)(using Quotes): Expr[(Int, CharSequence) => Int] =
+  def genPrefixFind(prog: Prog)(using Quotes): Expr[(Int, CharSequence) => Int] =
     '{ (startPos: Int, input: CharSequence) =>
       val result: Int =
         ${

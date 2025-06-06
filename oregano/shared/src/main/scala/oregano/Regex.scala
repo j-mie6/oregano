@@ -13,6 +13,7 @@ abstract class Regex[Match] {
   def matchesLinear(input: CharSequence): Boolean
   def findPrefixOf(source: CharSequence): Option[String]
   def findFirstIn(source: CharSequence): Option[String]
+  def split(toSplit: CharSequence): Array[String]
   def unapplySeq(input: CharSequence): Option[List[String]]
 }
 
@@ -30,7 +31,7 @@ object Regex {
     def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
     def findPrefixOf(source: CharSequence): Option[String] = compiled.findPrefixOf(source)
     def findFirstIn(source: CharSequence): Option[String] = compiled.findFirstIn(source)
-
+    def split(toSplit: CharSequence): Array[String] = compiled.split(toSplit)
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }
 }

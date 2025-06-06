@@ -36,10 +36,10 @@ private[oregano] def compileMacro(
           BacktrackingProgMatcher.genMatcher(prog)
         else CPSMatcher.genMatcherPattern(p)
 
-      val backtrackingFinderExpr: Expr[(Int, CharSequence) => Int] =
+      val backtrackingPrefixFinderExpr: Expr[(Int, CharSequence) => Int] =
         if patternResult.flatControlFlow then
-          BacktrackingProgMatcher.genFind(prog)
-        else CPSMatcher.genFinderPattern(p, groupCount)
+          BacktrackingProgMatcher.genPrefixFind(prog)
+        else CPSMatcher.genPrefixFinderPattern(p, groupCount)
       // useful for debugging:
       // val backtrackCPSMatcherExpr = CPSMatcher.genMatcherPattern(p)
       // val backtrackingCPSMatcherWithCaps = CPSMatcher.genMatcherPatternWithCaps(p, groupCount)
@@ -79,7 +79,7 @@ private[oregano] def compileMacro(
           def matchesLinear(input: CharSequence): Boolean =
             $linearMatcherExpr(re2Machine, input)
           def findPrefixOf(source: CharSequence): Option[String] =
-            val matchPos = $backtrackingFinderExpr(0, source)
+            val matchPos = $backtrackingPrefixFinderExpr(0, source)
             if matchPos != -1 then
               Some(source.subSequence(0, matchPos).toString)
             else
@@ -88,11 +88,30 @@ private[oregano] def compileMacro(
             val len = source.length
             var pos = 0
             while pos < len do
-              val matchPos = $backtrackingFinderExpr(pos, source)
+              val matchPos = $backtrackingPrefixFinderExpr(pos, source)
               if matchPos != -1 then
                 return Some(source.subSequence(pos, matchPos).toString)
               pos += 1
             None
+
+          def split(toSplit: CharSequence): Array[String] = 
+            val result = scala.collection.mutable.ArrayBuffer.empty[String]
+            val len = toSplit.length
+            var pos = 0
+            var lastEnd = 0
+
+            while pos < len do
+              val matchEnd = $backtrackingPrefixFinderExpr(pos, toSplit)
+              if matchEnd != -1 then
+                result += toSplit.subSequence(lastEnd, pos).toString
+                lastEnd = matchEnd
+                pos = if matchEnd == pos then pos + 1 else matchEnd
+              else
+                pos += 1
+
+            if lastEnd != len then
+              result += toSplit.subSequence(lastEnd, len).toString
+            result.toArray
 
           // def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
           def unapplySeq(input: CharSequence): Option[List[String]] =
