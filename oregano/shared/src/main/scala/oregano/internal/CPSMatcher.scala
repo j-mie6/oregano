@@ -94,7 +94,7 @@ object CPSMatcher:
         }
 
       case Pattern.Capture(idx, sub) =>
-        if (!withCaps || idx > noCaps) then
+        if (!withCaps || idx >= noCaps) then
           compile(sub, input, noCaps, cont, false, '{ null })
         else
           val endSlotIdx: Expr[Int] = Expr(2 * idx + 1)
@@ -159,14 +159,14 @@ object CPSMatcher:
 
   def genFinderPattern(pattern: Pattern, numGroups: Int)(using
       Quotes
-  ): Expr[CharSequence => Boolean] =
-    '{ (input: CharSequence) =>
+  ): Expr[(Int, CharSequence) => Int] =
+    '{ (startPos: Int, input: CharSequence) =>
       val matcherFn: Int => Int =
         ${
-          compile(pattern, 'input, 0, '{ (i: Int) => i }, false, '{ null })
+          compile(pattern, 'input, 1, '{ (i: Int) => i }, false, '{ null })
         }
 
-      matcherFn(0) >= 0
+      matcherFn(startPos)
     }
 
   def makeMatcher(

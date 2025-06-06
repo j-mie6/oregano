@@ -11,7 +11,8 @@ abstract class Regex[Match] {
   def matches(input: CharSequence): Boolean
   def matchesWithCaps(input: CharSequence): Option[Array[Int]]
   def matchesLinear(input: CharSequence): Boolean
-  def find(input: CharSequence): Boolean 
+  def findPrefixOf(source: CharSequence): Option[String]
+  def findFirstIn(source: CharSequence): Option[String]
   def unapplySeq(input: CharSequence): Option[List[String]]
 }
 
@@ -27,9 +28,9 @@ object Regex {
     def matches(input: CharSequence): Boolean = compiled.matches(input)
     def matchesWithCaps(input: CharSequence): Option[Array[Int]] = ???
     def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
+    def findPrefixOf(source: CharSequence): Option[String] = compiled.findPrefixOf(source)
+    def findFirstIn(source: CharSequence): Option[String] = compiled.findFirstIn(source)
 
-    def find(input: CharSequence): Boolean = ???
-    
     def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
   }
 }

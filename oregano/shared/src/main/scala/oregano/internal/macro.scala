@@ -36,7 +36,7 @@ private[oregano] def compileMacro(
           BacktrackingProgMatcher.genMatcher(prog)
         else CPSMatcher.genMatcherPattern(p)
 
-      val backtrackingFinderExpr: Expr[CharSequence => Boolean] =
+      val backtrackingFinderExpr: Expr[(Int, CharSequence) => Int] =
         if patternResult.flatControlFlow then
           BacktrackingProgMatcher.genFind(prog)
         else CPSMatcher.genFinderPattern(p, groupCount)
@@ -78,8 +78,22 @@ private[oregano] def compileMacro(
             $backtrackingMatcherWithCapsExpr(input)
           def matchesLinear(input: CharSequence): Boolean =
             $linearMatcherExpr(re2Machine, input)
-          def find(input: CharSequence): Boolean =
-            $backtrackingFinderExpr(input)
+          def findPrefixOf(source: CharSequence): Option[String] =
+            val matchPos = $backtrackingFinderExpr(0, source)
+            if matchPos != -1 then
+              Some(source.subSequence(0, matchPos).toString)
+            else
+              None
+          def findFirstIn(source: CharSequence): Option[String] =
+            val len = source.length
+            var pos = 0
+            while pos < len do
+              val matchPos = $backtrackingFinderExpr(pos, source)
+              if matchPos != -1 then
+                return Some(source.subSequence(pos, matchPos).toString)
+              pos += 1
+            None
+
           // def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
           def unapplySeq(input: CharSequence): Option[List[String]] =
             matchesWithCaps(input).map { caps =>

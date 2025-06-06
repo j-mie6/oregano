@@ -220,8 +220,8 @@ object BacktrackingProgMatcher:
       if (result == input.length) then Some(groups) else None
     }
 
-  def genFind(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] =
-    '{ (input: CharSequence) =>
+  def genFind(prog: Prog)(using Quotes): Expr[(Int, CharSequence) => Int] =
+    '{ (startPos: Int, input: CharSequence) =>
       val result: Int =
         ${
           compile(
@@ -230,14 +230,14 @@ object BacktrackingProgMatcher:
             prog.numInst,
             'input,
             0,
-            '{ 0 },
+            '{ startPos },
             false,
             '{ null },
             false
           )
         }
 
-      result >= 0
+      result
     }
 
   def matches(prog: Prog, input: CharSequence): Boolean = {
