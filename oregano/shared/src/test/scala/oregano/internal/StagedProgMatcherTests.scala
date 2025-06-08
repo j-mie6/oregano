@@ -212,6 +212,36 @@ class StagedProgMatcherTests extends AnyFlatSpec {
     }
   }
 
+  val matcherWithSequentialLoops = stagedProg("((a*)b*)bc")
+
+  behavior of "StagedProgMatcher - matches - ((a*)b*)bc"
+
+  it should "handle sequential loops correctly" in {
+    val cases = Table(
+      ("input", "expected"),
+      ("abbbbbbbc", true),
+      ("a", false),
+      ("aabbc", true),
+      ("abc", true),
+      ("abbc", true),
+      ("abbbc", true),
+      ("aaaaabaababbc", false),
+      ("aaaaabc", true),
+      ("bc", true),
+      ("abc", true),
+      ("def", false),
+      ("", false),
+      ("defg", false),
+      ("de", false)
+    )
+
+    forAll(cases) { (input, expected) =>
+      withClue(s"Input: '$input'") {
+        matcherWithSequentialLoops(input) shouldBe expected
+      }
+    }
+  }
+
   val matcherCapsWithSequentialLoops = stagedProgWithCaps("((a*)b*)bc|(def)")
 
   behavior of "StagedProgMatcher - matchesWithCaps - ((a*)b*)bc|(def)"
