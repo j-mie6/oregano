@@ -38,135 +38,124 @@ object CPSMatcher:
       p: Pattern,
       input: Expr[CharSequence],
       noCaps: Int,
-      cont: Expr[Int => Int],
+      pos: Expr[Int],
+      cont: Expr[Int] => Expr[Int],
       withCaps: Boolean,
       groupsExpr: Expr[Array[Int]]
-  )(using Quotes): Expr[Int => Int] =
+  )(using Quotes): Expr[Int] =
 
     p match
       case Pattern.Lit(c) =>
-        '{ (pos: Int) =>
-          if pos < $input.length && $input.charAt(pos) == ${ Expr(c) } then
-            $cont(pos + 1)
+        '{
+          if $pos < $input.length && $input.charAt($pos) == ${Expr(c)} then
+            ${ cont('{ $pos + 1 }) }
           else -1
         }
 
       case Pattern.Class(diet) =>
         val runeCheck: Expr[Int => Boolean] = dietContains(diet)
-        '{ (pos: Int) =>
-          if pos < $input.length &&
-            ${ Expr.betaReduce('{ $runeCheck($input.charAt(pos).toInt) }) }
-          then $cont(pos + 1)
+        '{
+          if $pos < $input.length &&
+            ${Expr.betaReduce('{ $runeCheck($input.charAt($pos).toInt) })}
+          then ${ cont('{ $pos + 1 }) }
           else -1
         }
 
       case Pattern.Cat(ps) =>
-        ps.foldRight(cont) { (subPattern, nextCont) =>
-          compile(subPattern, input, noCaps, nextCont, withCaps, groupsExpr)
-        }
+        ps.foldRight(cont) { (sub, next) =>
+          (p: Expr[Int]) => compile(sub, input, noCaps, p, next, withCaps, groupsExpr)
+        }(pos)
 
       case Pattern.Alt(p1, p2) =>
-        val leftExpr = compile(p1, input, noCaps, cont, withCaps, groupsExpr)
-        val rightExpr = compile(p2, input, noCaps, cont, withCaps, groupsExpr)
-        '{ (pos: Int) =>
-          val lp = $leftExpr(pos)
-          if lp >= 0 then lp else $rightExpr(pos)
-        }
+        val left  = compile(p1, input, noCaps, pos, cont, withCaps, groupsExpr)
+        val right = compile(p2, input, noCaps, pos, cont, withCaps, groupsExpr)
+        '{ val lp = $left; if lp >= 0 then lp else $right }
 
       case Pattern.Rep0(sub, _) =>
         '{
-          def self(pos: Int): Int =
+          def self(p: Int): Int =
             val step = ${
               compile(
                 sub,
                 input,
                 noCaps,
-                '{ (next: Int) =>
-                  if next != pos then self(next) else -1
-                },
+                '{ p },
+                (next: Expr[Int]) => '{ if $next != p then self($next) else -1 },
                 withCaps,
                 groupsExpr
               )
             }
-            val r = step(pos)
-            if r >= 0 then r else $cont(pos)
-          self
+            if step >= 0 then step else ${ cont('{ p }) }
+          self($pos)
         }
 
       case Pattern.Capture(idx, sub) =>
-        if (!withCaps || idx >= noCaps) then
-          compile(sub, input, noCaps, cont, false, '{ null })
+        if !withCaps || idx >= noCaps then
+          compile(sub, input, noCaps, pos, cont, false, '{ null })
         else
-          val endSlotIdx: Expr[Int] = Expr(2 * idx + 1)
-          val cont1: Expr[Int => Int] =
-            '{ (endPos: Int) =>
-              val savedEnd = $groupsExpr(${ endSlotIdx })
-              $groupsExpr(${ endSlotIdx }) = endPos
-              val res = $cont(endPos)
-              if (res >= 0) then res
+          val startIdx = Expr(2 * idx)
+          val endIdx   = Expr(2 * idx + 1)
+
+          val newCont: Expr[Int] => Expr[Int] = (endPos: Expr[Int]) =>
+            '{
+              val savedEnd = $groupsExpr($endIdx)
+              $groupsExpr($endIdx) = $endPos
+              val res = ${ cont(endPos) }
+              if res >= 0 then res
               else {
-                $groupsExpr(${ endSlotIdx }) = savedEnd
+                $groupsExpr($endIdx) = savedEnd
                 -1
               }
             }
 
-          val inner: Expr[Int => Int] =
-            compile(sub, input, noCaps, cont1, true, groupsExpr)
+          val inner = compile(sub, input, noCaps, pos, newCont, true, groupsExpr)
 
-          val startSlotIdx: Expr[Int] = Expr(2 * idx)
-          '{ (pos: Int) =>
-            val savedStart = $groupsExpr(${ startSlotIdx })
-            $groupsExpr(${ startSlotIdx }) = pos
-            val r2 = ${ inner }(pos)
-            if (r2 >= 0) then r2
+          '{
+            val savedStart = $groupsExpr($startIdx)
+            $groupsExpr($startIdx) = $pos
+            val res = $inner
+            if res >= 0 then res
             else {
-              $groupsExpr(${ startSlotIdx }) = savedStart
+              $groupsExpr($startIdx) = savedStart
               -1
             }
           }
 
-  def genMatcherPattern(pattern: Pattern)(using
-      Quotes
-  ): Expr[CharSequence => Boolean] =
-    '{ (input: CharSequence) =>
-      val cont: Int => Int = (i: Int) => if i == input.length then i else -1
-
-      val matcherFn: Int => Int =
-        ${ compile(pattern, 'input, 0, '{ cont }, false, '{ null }) }
-
-      matcherFn(0) == input.length
+  def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] =
+    '{
+      (input: CharSequence) =>
+        val result = ${
+          val cont = (i: Expr[Int]) => '{ if $i == input.length then $i else -1 }
+          compile(pattern, 'input, 0, '{ 0 }, cont, false, '{ null })
+        }
+        result == input.length
     }
 
-  def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using
-      Quotes
-  ): Expr[CharSequence => Option[Array[Int]]] =
-    '{ (input: CharSequence) =>
-      val inputLen = input.length
-      val groups = Array.fill(${ Expr(numGroups * 2) })(-1)
-      groups(0) = 0
+  def genMatcherPatternWithCaps(pattern: Pattern, numGroups: Int)(using Quotes): Expr[CharSequence => Option[Array[Int]]] =
+    '{
+      (input: CharSequence) =>
+        val inputLen = input.length
+        val groups = Array.fill(${Expr(numGroups * 2)})(-1)
+        groups(0) = 0
 
-      val cont: Int => Int = (i: Int) => if i == inputLen then i else -1
-
-      val matcherFn: Int => Int =
-        ${ compile(pattern, 'input, numGroups, '{ cont }, true, '{ groups }) }
-
-      val matched = matcherFn(0)
-      if matched == inputLen then
-        groups(1) = matched
-        Some(groups)
-      else None
-    }
-
-  def genPrefixFinderPattern(pattern: Pattern, numGroups: Int)(using
-      Quotes
-  ): Expr[(Int, CharSequence) => Int] =
-    '{ (startPos: Int, input: CharSequence) =>
-      val matcherFn: Int => Int =
-        ${
-          compile(pattern, 'input, 1, '{ (i: Int) => i }, false, '{ null })
+        val result = ${
+          val cont = (i: Expr[Int]) => '{ if $i == inputLen then $i else -1 }
+          compile(pattern, 'input, numGroups, '{ 0 }, cont, withCaps = true, 'groups)
         }
 
-      matcherFn(startPos)
+        if result == inputLen then
+          groups(1) = result
+          Some(groups)
+        else None
+    }
+
+  def genPrefixFinderPattern(pattern: Pattern, numGroups: Int)(using Quotes): Expr[(Int, CharSequence) => Int] =
+    '{
+      (startPos: Int, input: CharSequence) =>
+        ${
+          val cont = (i: Expr[Int]) => i
+          compile(pattern, 'input, numGroups, 'startPos, cont, withCaps = false, '{ null })
+        }
     }
 
   def makeMatcher(
