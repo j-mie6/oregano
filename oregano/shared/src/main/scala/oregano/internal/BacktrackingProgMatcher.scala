@@ -124,71 +124,71 @@ object BacktrackingProgMatcher:
           }
 
         case InstOp.LOOP => 
-          // '{
-          //   def exit(pos: Int): Int =
-          //     ${
-          //       compile(
-          //         prog,
-          //         inst.arg,
-          //         end,
-          //         input,
-          //         noCaps,
-          //         '{ pos },
-          //         withCaps,
-          //         capExpr,
-          //         wholeMatch
-          //       )
-          //     }
-
-          //   def forward(pos: Int, b: Backoffs): (Backoffs, Int) = {
-          //     val next = ${
-          //       compile(
-          //         prog,
-          //         inst.out,
-          //         pc,
-          //         input,
-          //         noCaps,
-          //         '{ pos },
-          //         withCaps,
-          //         capExpr,
-          //         wholeMatch
-          //       )
-          //     }
-
-          //     if next == -1 || next == pos then (b, pos)
-          //     else {
-          //       val w = next - pos
-          //       if b != null && b.width == w then {
-          //         b.count += 1
-          //         forward(next, b)
-          //       } else {
-          //         forward(next, new Backoffs(w, 1, b))
-          //       }
-          //     }
-          //   }
-
-          //   def backtrack(cur: Backoffs, base: Int, i: Int): Int = {
-          //     if cur == null then
-          //       exit($pos)
-          //     else if i < cur.count then
-          //       val attemptPos = base - i * cur.width
-          //       val r = exit(attemptPos)
-          //       if r >= 0 then r
-          //       else backtrack(cur, base, i + 1)
-          //     else
-          //       backtrack(cur.parent, base, 0)
-          //   }
-
-          //   val (backoffs, finalPos) = forward($pos, null)
-          //   backtrack(backoffs, finalPos, 0)
-          // }
           '{
-            def exit(pos: Int): Int = ${compile(prog, inst.arg, end, input, noCaps, 'pos, withCaps, capExpr, wholeMatch)}
-            def next(pos: Int): Int = ${compile(prog, inst.out, pc, input, noCaps, 'pos, withCaps, capExpr, wholeMatch)}
-            val start = $pos
-            val (backoffs, finalPos) = forward(next, start, null)
-            backtrack(backoffs, start, finalPos, 0, exit)
+            def exit(pos: Int): Int =
+              ${
+                compile(
+                  prog,
+                  inst.arg,
+                  end,
+                  input,
+                  noCaps,
+                  '{ pos },
+                  withCaps,
+                  capExpr,
+                  wholeMatch
+                )
+              }
+
+            def forward(pos: Int, b: Backoffs): (Backoffs, Int) = {
+              val next = ${
+                compile(
+                  prog,
+                  inst.out,
+                  pc,
+                  input,
+                  noCaps,
+                  '{ pos },
+                  withCaps,
+                  capExpr,
+                  wholeMatch
+                )
+              }
+
+              if next == -1 || next == pos then (b, pos)
+              else {
+                val w = next - pos
+                if b != null && b.width == w then {
+                  b.count += 1
+                  forward(next, b)
+                } else {
+                  forward(next, new Backoffs(w, 1, b))
+                }
+              }
+            }
+
+            def backtrack(cur: Backoffs, base: Int, i: Int): Int = {
+              if cur == null then
+                exit($pos)
+              else if i < cur.count then
+                val attemptPos = base - i * cur.width
+                val r = exit(attemptPos)
+                if r >= 0 then r
+                else backtrack(cur, base, i + 1)
+              else
+                backtrack(cur.parent, base, 0)
+            }
+
+            val (backoffs, finalPos) = forward($pos, null)
+            backtrack(backoffs, finalPos, 0)
           }
+          // '{
+          //   def exit(pos: Int): Int = ${compile(prog, inst.arg, end, input, noCaps, 'pos, withCaps, capExpr, wholeMatch)}
+          //   def next(pos: Int): Int = ${compile(prog, inst.out, pc, input, noCaps, 'pos, withCaps, capExpr, wholeMatch)}
+          //   val start = $pos
+          //   val (backoffs, finalPos) = forward(next, start, null)
+          //   backtrack(backoffs, start, finalPos, 0, exit)
+          // }
 
         case InstOp.CAPTURE =>
           val slot = inst.arg
