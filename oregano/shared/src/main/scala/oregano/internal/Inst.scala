@@ -102,10 +102,10 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
     case InstOp.LOOP =>
       s"loop -> $out, $arg"
 
-  def matchRuneExpr(using Quotes): Expr[Int => Boolean] =
+  def matchRuneExpr(using Quotes): Expr[Int] => Expr[Boolean] =
     if runes.length == 1 then
       val lit = runes(0)
-      '{ (r: Int) => r == ${ Expr(lit) } }
+      (r: Expr[Int]) => '{ $r == ${Expr(lit)} }
     else
       val pairs: List[(Int, Int)] = runes
         .grouped(2)
@@ -115,14 +115,12 @@ final case class Inst(op: InstOp, out: Int, arg: Int, runes: IArray[Int]) {
         }
         .toList
 
-      '{ (r: Int) =>
-        ${
-          val conditions = pairs.map { case (lo, hi) =>
-            if lo == hi then '{ r == ${ Expr(lo) } }
-            else '{ r >= ${ Expr(lo) } && r <= ${ Expr(hi) } }
-          }
-          conditions.reduceLeft((a, b) => '{ $a || $b })
+      (r: Expr[Int]) => {
+        val conditions = pairs.map { case (lo, hi) =>
+          if lo == hi then '{ $r == ${Expr(lo)} }
+          else '{ $r >= ${Expr(lo)} && $r <= ${Expr(hi)} }
         }
+        conditions.reduceLeft((a, b) => '{ $a || $b })
       }
 
   private def escapeRunes(runes: IArray[Int]): String =

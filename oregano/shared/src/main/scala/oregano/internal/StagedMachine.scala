@@ -146,6 +146,7 @@ object StagedMachine:
       // (0 until prog.numInst).toList filter(
       //   pc => requiredInstOps.contains(prog.getInst(pc).op)
       // ) map { pc =>
+      // for each pc instruction, produces a statement of form `case $pc => body`
       (0 until prog.numInst).toList map { pc =>
         val inst = prog.getInst(pc)
         val body = generateStagedStepForPc(
@@ -200,6 +201,7 @@ object StagedMachine:
           // pretty cool: we basically say 'trust me, pc exists' then build a match expr!
           // should probably do nothing rather than returning cases when cases do nothing
           ${
+            // generate a match block of form match pc: $..caseDefs*
             val matchExpr = Match(
               '{ pc }.asTerm,
               caseDefs('{ m }, '{ runq }, '{ nextq }, '{ pos }, '{ rune })
@@ -284,14 +286,13 @@ object StagedMachine:
       case InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY |
           InstOp.RUNE_ANY_NOT_NL =>
         val runeCheck = inst.matchRuneExpr
+        val matched = runeCheck(rune)
         '{
           var t = $runq.getThread($pcExpr)
           if t != null then
             // val matched = ${ runeCheck }($rune)
-            val matched = ${
-              Expr.betaReduce('{ $runeCheck($rune) })
-            } // interestingly this is inlined in the 'inline everything' approach, but not ordinarily!
-            if matched then
+            // interestingly this is inlined in the 'inline everything' approach, but not ordinarily!
+            if $matched then
               // uncomment for recursive add
               // t = $m.add($instOutExpr, $pos + 1, t.cap, $nextq, t)
               t = ${

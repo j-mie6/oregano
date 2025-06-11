@@ -10,28 +10,24 @@ final case class MatchResult(input: CharSequence, matches: Array[Int]) {
     input.subSequence(start(group), end(group)).toString
 }
 
-// essentially copy matchRuneExpr; todo: use a common function?
-def dietContains(diet: Diet[Int])(using Quotes): Expr[Int => Boolean] = {
+// // essentially copy matchRuneExpr; todo: use a common function?
+def dietContains(diet: Diet[Int])(using Quotes): Expr[Int] => Expr[Boolean] = {
   val runes: List[Int] = Utils.dietToRanges(diet)
 
   val pairs: List[(Int, Int)] = runes
     .grouped(2)
-    .collect { case List(lo, hi) =>
-      (lo, hi)
-    }
+    .collect { case List(lo, hi) => (lo, hi) }
     .toList
 
-  // vaccuously handle diet with 1 rune, by construction singleton does not exist
-  '{ (r: Int) =>
-    ${
-      val conditions = pairs.map { case (lo, hi) =>
-        if lo == hi then '{ r == ${ Expr(lo) } }
-        else '{ r >= ${ Expr(lo) } && r <= ${ Expr(hi) } }
-      }
-      conditions.reduceLeft((a, b) => '{ $a || $b })
+  (r: Expr[Int]) => {
+    val conditions: List[Expr[Boolean]] = pairs.map { case (lo, hi) =>
+      if lo == hi then '{ $r == ${Expr(lo)} }
+      else '{ $r >= ${Expr(lo)} && $r <= ${Expr(hi)} }
     }
+    conditions.reduceLeft((a, b) => '{ $a || $b })
   }
 }
+
 
 object CPSMatcher:
   private def compile(
@@ -53,10 +49,10 @@ object CPSMatcher:
         }
 
       case Pattern.Class(diet) =>
-        val runeCheck: Expr[Int => Boolean] = dietContains(diet)
+        val runeCheck: Expr[Int] => Expr[Boolean] = dietContains(diet)
+        val condExpr: Expr[Boolean] = runeCheck('{ $input.charAt($pos).toInt })
         '{
-          if $pos < $input.length &&
-            ${Expr.betaReduce('{ $runeCheck($input.charAt($pos).toInt) })}
+          if $pos < $input.length && $condExpr
           then ${ cont('{ $pos + 1 }) }
           else -1
         }

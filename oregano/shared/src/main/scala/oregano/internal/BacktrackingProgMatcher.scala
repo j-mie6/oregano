@@ -117,8 +117,12 @@ object BacktrackingProgMatcher:
             capExpr,
             wholeMatch
           )
+
+          val charExpr: Expr[Int] = '{ $input.charAt($pos).toInt }
+          val condExpr: Expr[Boolean] = runeCheck(charExpr)
+
           '{
-            if ($pos < $input.length && $runeCheck($input.charAt($pos).toInt))
+            if ($pos < $input.length && $condExpr)
             then $succExpr
             else -1
           }
