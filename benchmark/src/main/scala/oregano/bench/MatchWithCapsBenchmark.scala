@@ -14,7 +14,7 @@ class MatchWithCapsBenchmark {
   val inputAlternationHit = "grault"
   val inputAlternationFail = "foo" * 1000 + "nope"
   val inputAmbiguous = "a" * 20 + "b"
-  val inputRepeatingLiteral = "ab" * 1000 + "c"
+  val inputRepeatingLiteral = "ab" * 100 + "c"
   val inputManyGroups = "abcdefghij"
 
   val patternGreedyCapture = "(a*)b".regex
@@ -51,21 +51,21 @@ class MatchWithCapsBenchmark {
   }
 
 
-  // @Benchmark def matchGreedyCapture(): Option[Array[Int]] =
-  //   patternGreedyCapture.matchesWithCaps(inputGreedyCapture)
+  @Benchmark def matchGreedyCapture(): Option[Array[Int]] =
+    patternGreedyCapture.matchesWithCaps(inputGreedyCapture)
 
-  // @Benchmark def matchAlternationHit(): Option[Array[Int]] =
-  //   patternAlternationHit.matchesWithCaps(inputAlternationHit)
+  @Benchmark def matchAlternationHit(): Option[Array[Int]] =
+    patternAlternationHit.matchesWithCaps(inputAlternationHit)
 
-  // @Benchmark def matchAlternationFail(): Option[Array[Int]] =
-  //   patternAlternationFail.matchesWithCaps(inputAlternationFail)
+  @Benchmark def matchAlternationFail(): Option[Array[Int]] =
+    patternAlternationFail.matchesWithCaps(inputAlternationFail)
 
-  // @Benchmark def matchAmbiguousBacktrack(): Option[Array[Int]] =
-  //   patternAmbiguous.matchesWithCaps(inputAmbiguous)
+  @Benchmark def matchAmbiguousBacktrack(): Option[Array[Int]] =
+    patternAmbiguous.matchesWithCaps(inputAmbiguous)
 
   @Benchmark def matchRepeatingLiteral(): Option[Array[Int]] =
     patternRepeatingLiteral.matchesWithCaps(inputRepeatingLiteral)
 
-  // @Benchmark def matchManyGroup(): Option[Array[Int]] =
-  //   patternManyGroups.matchesWithCaps(inputManyGroups)
+  @Benchmark def matchManyGroup(): Option[Array[Int]] =
+    patternManyGroups.matchesWithCaps(inputManyGroups)
 }

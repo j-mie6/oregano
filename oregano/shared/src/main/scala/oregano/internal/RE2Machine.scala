@@ -128,8 +128,7 @@ class RE2Machine(val prog: Prog) extends Machine:
 
       case InstOp.ALT | InstOp.LOOP =>
         val t1 = add(inst.out, pos, cap, q, t)
-        val t2 = add(inst.arg, pos, cap, q, t1)
-        t2
+        add(inst.arg, pos, cap, q, t1)
 
       case InstOp.CAPTURE =>
         if inst.arg < ncap then

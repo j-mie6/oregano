@@ -45,7 +45,7 @@ object BacktrackingProgMatcher:
       noCaps: Int,
       pos: Expr[Int],
       withCaps: Boolean,
-      capExpr: Expr[Array[Int]],
+      cap: Expr[Array[Int]],
       wholeMatch: Boolean
   )(using Quotes): Expr[Int] =
     if pc == end then pos
@@ -62,13 +62,13 @@ object BacktrackingProgMatcher:
           else if wholeMatch then
             '{
               if $pos == $input.length then
-                $capExpr(1) = $pos
+                $cap(1) = $pos
                 $pos
               else -1
             }
           else
             '{
-              $capExpr(1) = $pos
+              $cap(1) = $pos
               $pos
             }
 
@@ -84,7 +84,7 @@ object BacktrackingProgMatcher:
             noCaps,
             pos,
             withCaps,
-            capExpr,
+            cap,
             wholeMatch
           )
           val rightExpr = compile(
@@ -95,7 +95,7 @@ object BacktrackingProgMatcher:
             noCaps,
             pos,
             withCaps,
-            capExpr,
+            cap,
             wholeMatch
           )
           '{
@@ -114,7 +114,7 @@ object BacktrackingProgMatcher:
             noCaps,
             nextPos,
             withCaps,
-            capExpr,
+            cap,
             wholeMatch
           )
 
@@ -139,7 +139,7 @@ object BacktrackingProgMatcher:
                   noCaps,
                   '{ pos },
                   withCaps,
-                  capExpr,
+                  cap,
                   wholeMatch
                 )
               }
@@ -154,7 +154,7 @@ object BacktrackingProgMatcher:
                   noCaps,
                   '{ pos },
                   withCaps,
-                  capExpr,
+                  cap,
                   wholeMatch
                 )
               }
@@ -204,7 +204,7 @@ object BacktrackingProgMatcher:
             noCaps,
             pos,
             withCaps,
-            capExpr,
+            cap,
             wholeMatch
           )
 
@@ -216,14 +216,14 @@ object BacktrackingProgMatcher:
           else
             val slotIdx: Expr[Int] = Expr(slot)
             '{
-              val oldVal = $capExpr(${ slotIdx })
+              val oldVal = $cap(${ slotIdx })
               val curPos = $pos
               val res = $nextExp
               if (res >= 0) then
-                $capExpr(${ slotIdx }) = curPos
+                $cap(${ slotIdx }) = curPos
                 res
               else
-                $capExpr(${ slotIdx }) = oldVal
+                $cap(${ slotIdx }) = oldVal
                 -1
             }
 
