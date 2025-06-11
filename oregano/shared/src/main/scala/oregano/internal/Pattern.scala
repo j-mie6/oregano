@@ -14,15 +14,22 @@ given ToExpr[Diet[Int]] with
       '{ $acc.addRange($rngExpr) }
     }
 
-sealed trait Pattern {
+enum Pattern {
+  case Lit(c: Int)
+  case Cat(patterns: List[Pattern])
+  case Alt(left: Pattern, right: Pattern)
+  case Class(diet: Diet[Int])
+  case Rep0(pat: Pattern, idx: Int)
+  case Capture(groupIdx: Int, pat: Pattern)
+
   def optimize: Pattern = this match {
-    case Pattern.Cat(ps) =>
-      Pattern.Cat(ps.flatMap {
-        case Pattern.Cat(subs) => subs.map(_.optimize)
-        case p                 => List(p.optimize)
+    case Cat(ps) =>
+      Cat(ps.flatMap {
+        case Cat(subs) => subs.map(_.optimize)
+        case p         => List(p.optimize)
       })
-    case Pattern.Alt(p1, p2) =>
-      Pattern.Alt(p1.optimize, p2.optimize)
+    case Alt(p1, p2) =>
+      Alt(p1.optimize, p2.optimize)
     case _ => this
   }
 }
@@ -101,18 +108,11 @@ class PatternBuilder {
 }
 
 object Pattern {
-  final case class Lit(c: Int) extends Pattern
-  final case class Cat(patterns: List[Pattern]) extends Pattern
-  final case class Alt(left: Pattern, right: Pattern) extends Pattern
-  final case class Class(diet: Diet[Int]) extends Pattern
-  final case class Rep0(pat: Pattern, idx: Int) extends Pattern
-  final case class Capture(groupIdx: Int, pat: Pattern) extends Pattern
-
-  def lit(c: Int): Pattern = Lit(c)
-  def concat(ps: Pattern*): Pattern = Cat(ps.toList)
-  def alt(p1: Pattern, p2: Pattern): Pattern = Alt(p1, p2)
-  def charClass(diet: Diet[Int]): Pattern = Class(diet)
-  def rep0(pat: Pattern): Pattern = Rep0(pat, 0) // idx is not used here
+  def lit(c: Int): Pattern = Pattern.Lit(c)
+  def concat(ps: Pattern*): Pattern = Pattern.Cat(ps.toList)
+  def alt(p1: Pattern, p2: Pattern): Pattern = Pattern.Alt(p1, p2)
+  def charClass(diet: Diet[Int]): Pattern = Pattern.Class(diet)
+  def rep0(pat: Pattern): Pattern = Pattern.Rep0(pat, 0) // idx is not used here
 
   def compile(regex: Regex, nextGroup: Int = 1): PatternResult =
     val pat = new PatternBuilder()
@@ -142,6 +142,19 @@ object Pattern {
     )
     compile(re)
 }
+
+given ToExpr[Pattern] with
+  def apply(pat: Pattern)(using Quotes): Expr[Pattern] = pat match {
+    case Pattern.Lit(c)           => '{ Pattern.Lit(${ Expr(c) }) }
+    case Pattern.Cat(patterns)    => '{ Pattern.Cat(${ Expr(patterns) }) }
+    case Pattern.Alt(left, right) =>
+      '{ Pattern.Alt(${ Expr(left) }, ${ Expr(right) }) }
+    case Pattern.Class(diet)    => '{ Pattern.Class(${ Expr(diet) }) }
+    case Pattern.Rep0(pat, idx) =>
+      '{ Pattern.Rep0(${ Expr(pat) }, ${ Expr(idx) }) }
+    case Pattern.Capture(groupIdx, pat) =>
+      '{ Pattern.Capture(${ Expr(groupIdx) }, ${ Expr(pat) }) }
+  }
 
 @main def testPatterns() =
   val p1 = Pattern.concat(
