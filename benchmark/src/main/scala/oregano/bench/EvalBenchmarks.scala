@@ -90,17 +90,17 @@ class EvalBenchmarks {
   // --- Benchmarks ---
 
   @Benchmark def matchEmail(): Boolean =
-    regexEmail.matchesLinear(pick(emails))
+    regexEmail.matches(pick(emails))
 
   @Benchmark def matchFilePath(): Boolean =
-    regexFilePath.matchesLinear(pick(paths))
+    regexFilePath.matches(pick(paths))
 
   @Benchmark def matchHexColour(): Boolean =
-    regexHex.matchesLinear(pick(hexColors))
+    regexHex.matches(pick(hexColors))
 
   @Benchmark def matchLogLine(): Boolean =
-    regexLog.matchesLinear(pick(logs))
+    regexLog.matches(pick(logs))
 
   @Benchmark def matchIdentifier(): Boolean =
-    regexEmail.matchesLinear(pick(identifiers))
+    regexEmail.matches(pick(identifiers))
 }

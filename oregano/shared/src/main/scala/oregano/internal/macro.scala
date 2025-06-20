@@ -15,10 +15,10 @@ private[oregano] def compileMacro(
   parse(s) match
     case Right(ast) =>
       // report.info(s"$ast")
-      val patternResult = Pattern.compile(ast)
-      // report.info(s"Parsley AST: ${ast.toString}\nPattern: ${patternResult.pattern}, groupCount: ${patternResult.groupCount}")
-      val p = patternResult.pattern
-      val groupCount = patternResult.groupCount
+      // val patternResult = Pattern.compile(ast)
+      val PatternResult(p, groupCount, flatControlFlow, _) =
+        Pattern.compile(ast)
+      // report.info(s"expr: $s\nParsley AST: ${ast.toString}\nPattern: ${patternResult.pattern}, groupCount: ${patternResult.groupCount}")
       val prog = ProgramCompiler.compileRegexp(p, groupCount)
       // report.info(s"Prog:\n$prog")
       val liftedProgExpr = Expr(prog)
@@ -27,17 +27,17 @@ private[oregano] def compileMacro(
       // backtracking matcher stuff
       val backtrackingMatcherWithCapsExpr
           : Expr[CharSequence => Option[Array[Int]]] =
-        if patternResult.flatControlFlow then
+        if flatControlFlow then
           BacktrackingProgMatcher.genMatcherWithCaps(prog)
         else CPSMatcher.genMatcherPatternWithCaps(p, groupCount)
 
       val backtrackingMatcherExpr: Expr[CharSequence => Boolean] =
-        if patternResult.flatControlFlow then
+        if flatControlFlow then
           BacktrackingProgMatcher.genMatcher(prog)
         else CPSMatcher.genMatcherPattern(p)
 
       val backtrackingPrefixFinderExpr: Expr[(Int, CharSequence) => Int] =
-        if patternResult.flatControlFlow then
+        if flatControlFlow then
           BacktrackingProgMatcher.genPrefixFind(prog)
         else CPSMatcher.genPrefixFinderPattern(p, groupCount)
       // useful for debugging:
@@ -60,14 +60,12 @@ private[oregano] def compileMacro(
         }
 
       // for testing:
-      // val nodeCount = Utils.countNodes(backtrackProgMatcherExpr)
+      // val nodeCount = Utils.countNodes(backtrackingMatcherExpr)
       // println(s"regex: $s counted nodes: $nodeCount, numInst: ${prog.numInst}")
       // val nodeCountWithCaps = Utils.countNodes(backtrackProgMatcherWithCaps)
       // println(s"regex: $s counted nodes: $nodeCountWithCaps, numInst: ${prog.numInst}")
       '{
         new oregano.Regex[List[String]] {
-          val regex = ${ Expr(s) }.r
-          // val re2 = ${Expr(s)}.r2
           val prog = $liftedProgExpr
           val re2Machine = RE2Machine(prog)
 
@@ -113,7 +111,6 @@ private[oregano] def compileMacro(
               result += toSplit.subSequence(lastEnd, len).toString
             result.toArray
 
-          // def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
           def unapplySeq(input: CharSequence): Option[List[String]] =
             matchesWithCaps(input).map { caps =>
               caps

@@ -1,6 +1,6 @@
 enablePlugins(JmhPlugin)
 
-ThisBuild / scalaVersion := "3.5.0"
+ThisBuild / scalaVersion := "3.7.1"
 
 fork := true
 

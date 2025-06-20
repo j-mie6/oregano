@@ -70,6 +70,9 @@ class ProgramCompiler {
       Frag(f.i, (f.i << 1) | 1)
   }
 
+  /* 
+  Below blindly reimplemented, perhaps useful for reference but currently unused.
+   */
   // private def quest(f1: Frag, nongreedy: Boolean): Frag = {
   //   val f = newInst(InstOp.ALT)
   //   val i = progBuilder.getInst(f.i)
@@ -160,47 +163,6 @@ class ProgramCompiler {
       cat(cat(bra, sub), ket)
   }
 }
-//     case RegexpOp.NO_MATCH      => fail()
-//     case RegexpOp.EMPTY_MATCH   => nop()
-//     case RegexpOp.LITERAL       =>
-//       re.runes.foldLeft(Option.empty[Frag]) { (acc, r) =>
-//         val frag = rune(r, re.flags)
-//         Some(acc.fold(frag)(cat(_, frag)))
-//       }.getOrElse(nop())
-
-//     case RegexpOp.CHAR_CLASS    => rune(re.runes, re.flags)
-//     case RegexpOp.ANY_CHAR_NOT_NL => rune(ANY_RUNE_NOT_NL, 0)
-//     case RegexpOp.ANY_CHAR        => rune(ANY_RUNE, 0)
-
-//     case RegexpOp.BEGIN_LINE      => empty(Utils.EMPTY_BEGIN_LINE)
-//     case RegexpOp.END_LINE        => empty(Utils.EMPTY_END_LINE)
-//     case RegexpOp.BEGIN_TEXT      => empty(Utils.EMPTY_BEGIN_TEXT)
-//     case RegexpOp.END_TEXT        => empty(Utils.EMPTY_END_TEXT)
-//     case RegexpOp.WORD_BOUNDARY   => empty(Utils.EMPTY_WORD_BOUNDARY)
-//     case RegexpOp.NO_WORD_BOUNDARY=> empty(Utils.EMPTY_NO_WORD_BOUNDARY)
-
-//     case RegexpOp.CAPTURE =>
-//       val bra = cap(re.cap << 1)
-//       val sub = compile(re.subs.head)
-//       val ket = cap(re.cap << 1 | 1)
-//       cat(cat(bra, sub), ket)
-
-// case RegexpOp.STAR   => star(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
-//     case RegexpOp.PLUS   => plus(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
-//     case RegexpOp.QUEST  => quest(compile(re.subs.head), (re.flags & RE2.NON_GREEDY) != 0)
-
-//     case RegexpOp.CONCAT =>
-//       re.subs.foldLeft(Option.empty[Frag]) { (acc, r) =>
-//         val frag = compile(r)
-//         Some(acc.fold(frag)(cat(_, frag)))
-//       }.getOrElse(nop())
-
-//     case RegexpOp.ALTERNATE =>
-//       re.subs.foldLeft(Option.empty[Frag]) { (acc, r) =>
-//         val frag = compile(r)
-//         Some(acc.fold(frag)(alt(_, frag)))
-//       }.getOrElse(nop())
-//   }
 
 object ProgramCompiler {
   def apply(): ProgramCompiler = new ProgramCompiler()

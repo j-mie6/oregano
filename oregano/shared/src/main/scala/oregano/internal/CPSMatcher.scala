@@ -157,7 +157,6 @@ object CPSMatcher:
   def makeMatcher(
       pattern: Pattern,
       numGroups: Int,
-      numReps: Int
   ): (CharSequence, Boolean) => Option[Array[Int]] = {
     def matcher(input: CharSequence, anchorEnd: Boolean): Option[Array[Int]] = {
       val inputLen = input.length
@@ -264,29 +263,26 @@ object CPSMatcher:
   def matchesWithCaps(
       pattern: Pattern,
       numGroups: Int,
-      numReps: Int,
       input: CharSequence
   ): Option[Array[Int]] =
-    val matcher = makeMatcher(pattern, numGroups, numReps)
+    val matcher = makeMatcher(pattern, numGroups)
     matcher(input, true)
 
   def matches(
       pattern: Pattern,
       numGroups: Int,
-      numReps: Int,
       input: CharSequence
   ): Boolean = {
-    val matcher = makeMatcher(pattern, numGroups, numReps)
+    val matcher = makeMatcher(pattern, numGroups)
     matcher(input, true).isDefined
   }
 
   def find(
       pattern: Pattern,
       numGroups: Int,
-      numReps: Int,
       input: CharSequence
   ): Boolean = {
-    val matcher = makeMatcher(pattern, numGroups, numReps)
+    val matcher = makeMatcher(pattern, numGroups)
     val res = matcher(input, false)
     res match
       case Some(groups) =>
@@ -298,63 +294,63 @@ object CPSMatcher:
   }
 
 @main def testCPSRuntime =
-  val PatternResult(pattern, groupCount, _, numReps) =
+  val PatternResult(pattern, groupCount, _, _) =
     Pattern.compile("((a*)b*)*bc|(def)")
   println(
-    s"ababc: ${CPSMatcher.matches(pattern, groupCount, numReps, "ababc")}"
+    s"ababc: ${CPSMatcher.matches(pattern, groupCount, "ababc")}"
   ) // true
   println(
-    s"aaaaabaababbc: ${CPSMatcher.matches(pattern, groupCount, numReps, "aaaaabaababbc")}"
+    s"aaaaabaababbc: ${CPSMatcher.matches(pattern, groupCount, "aaaaabaababbc")}"
   ) // true
   println(
-    s"def: ${CPSMatcher.matches(pattern, groupCount, numReps, "def")}"
+    s"def: ${CPSMatcher.matches(pattern, groupCount, "def")}"
   ) // true
   // println(CPSMatcher.matches(pattern, groupCount, "xyz")   // false
 
   println(
-    s"bc: ${CPSMatcher.matches(pattern, groupCount, numReps, "bc")}"
+    s"bc: ${CPSMatcher.matches(pattern, groupCount, "bc")}"
   ) // true
   // minimal match of first alternative
 
   println(
-    s"abbbbbc: ${CPSMatcher.matches(pattern, groupCount, numReps, "abbbbbc")}"
+    s"abbbbbc: ${CPSMatcher.matches(pattern, groupCount, "abbbbbc")}"
   ) // true
   // a*b* -> a + bbbbb
 
   println(
-    s"abababbbbbc: ${CPSMatcher.matches(pattern, groupCount, numReps, "abababbbbbc")}"
+    s"abababbbbbc: ${CPSMatcher.matches(pattern, groupCount, "abababbbbbc")}"
   ) // true
   // multiple repetitions of a*b*, followed by bc
 
-  println(s": ${CPSMatcher.matches(pattern, groupCount, numReps, "")}") // false
+  println(s": ${CPSMatcher.matches(pattern, groupCount, "")}") // false
   // empty string doesn't match either alternative
 
   println(
-    s"abc: ${CPSMatcher.matches(pattern, groupCount, numReps, "abc")}"
+    s"abc: ${CPSMatcher.matches(pattern, groupCount, "abc")}"
   ) // true
   // a*b* -> a, b, then bc
 
   println(
-    s"defg: ${CPSMatcher.matches(pattern, groupCount, numReps, "defg")}"
+    s"defg: ${CPSMatcher.matches(pattern, groupCount, "defg")}"
   ) // false
   // matches "def" but has trailing garbage
 
   println(
-    s"de: ${CPSMatcher.matches(pattern, groupCount, numReps, "de")}"
+    s"de: ${CPSMatcher.matches(pattern, groupCount, "de")}"
   ) // false
   // partial match on second alternative
 
   println(
-    s"abbbc: ${CPSMatcher.matches(pattern, groupCount, numReps, "abbbc")}"
+    s"abbbc: ${CPSMatcher.matches(pattern, groupCount, "abbbc")}"
   ) // true
 
   // test partial matches
   println(
-    s"abbbczzz: ${CPSMatcher.find(pattern, groupCount, numReps, "abbbczzz")}"
+    s"abbbczzz: ${CPSMatcher.find(pattern, groupCount, "abbbczzz")}"
   ) // true
   println(
-    s"defg: ${CPSMatcher.find(pattern, groupCount, numReps, "defg")}"
+    s"defg: ${CPSMatcher.find(pattern, groupCount, "defg")}"
   ) // true
   println(
-    s"de: ${CPSMatcher.find(pattern, groupCount, numReps, "de")}"
+    s"de: ${CPSMatcher.find(pattern, groupCount, "de")}"
   ) // false

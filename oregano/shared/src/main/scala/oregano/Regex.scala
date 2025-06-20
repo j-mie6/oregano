@@ -24,15 +24,19 @@ object Regex {
     private val patternResult = internal.Pattern.compile(s)
     private val pattern = patternResult.pattern
     private val numGroups = patternResult.groupCount
-    private val prog = internal.ProgramCompiler.compileRegexp(pattern, numGroups)
+    private val prog =
+      internal.ProgramCompiler.compileRegexp(pattern, numGroups)
     private val re2Machine = internal.RE2Machine(prog)
     def matches(input: CharSequence): Boolean = compiled.matches(input)
     def matchesWithCaps(input: CharSequence): Option[Array[Int]] = ???
     def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
-    def findPrefixOf(source: CharSequence): Option[String] = compiled.findPrefixOf(source)
-    def findFirstIn(source: CharSequence): Option[String] = compiled.findFirstIn(source)
+    def findPrefixOf(source: CharSequence): Option[String] =
+      compiled.findPrefixOf(source)
+    def findFirstIn(source: CharSequence): Option[String] =
+      compiled.findFirstIn(source)
     def split(toSplit: CharSequence): Array[String] = compiled.split(toSplit)
-    def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
+    def unapplySeq(input: CharSequence): Option[List[String]] =
+      compiled.unapplySeq(input)
   }
 }
 
@@ -40,7 +44,9 @@ extension (inline r: String)
   inline def regex: Regex[?] =
     ${ isInlineable('r) }
 
-private def isInlineable(regExpr: Expr[String])(using Quotes): Expr[Regex[?]] = {
+private def isInlineable(
+    regExpr: Expr[String]
+)(using Quotes): Expr[Regex[?]] = {
   regExpr match {
     case Expr(s) =>
       // use the macro, inlineable

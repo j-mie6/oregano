@@ -114,7 +114,7 @@ object Pattern {
   def charClass(diet: Diet[Int]): Pattern = Pattern.Class(diet)
   def rep0(pat: Pattern): Pattern = Pattern.Rep0(pat, 0) // idx is not used here
 
-  def compile(regex: Regex, nextGroup: Int = 1): PatternResult =
+  def compile(regex: Regex): PatternResult =
     val pat = new PatternBuilder()
     pat.build(regex)
 

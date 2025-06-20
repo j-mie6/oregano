@@ -1,5 +1,5 @@
 val projectName = "oregano"
-val Scala3 = "3.5.0"
+val Scala3 = "3.7.1"
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
@@ -30,6 +30,9 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
         name := projectName,
         headerLicenseStyle := HeaderLicenseStyle.SpdxSyntax,
         headerEmptyLine := false,
+
+        // scalaJSUseMainModuleInitializer := true,
+        // Compile / mainClass := Some("oregano.shared.ManualBench"),
 
         resolvers ++= Opts.resolver.sonatypeOssReleases, // Will speed up MiMA during fast back-to-back releases
         resolvers ++= Opts.resolver.sonatypeOssSnapshots,

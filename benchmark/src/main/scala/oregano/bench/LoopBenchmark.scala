@@ -2,7 +2,6 @@ package oregano.bench
 
 import org.openjdk.jmh.annotations.*
 import java.util.concurrent.TimeUnit
-import scala.compiletime.uninitialized
 import oregano.regex
 
 @BenchmarkMode(Array(Mode.Throughput))

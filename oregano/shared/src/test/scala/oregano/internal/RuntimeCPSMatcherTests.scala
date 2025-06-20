@@ -25,7 +25,7 @@ class RuntimeCPSMatcherTests_NestedLoops extends AnyFlatSpec {
 
     forAll(validFirstAlt) { str =>
       withClue(s"Failed on input: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe true
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe true
       }
     }
   }
@@ -38,7 +38,7 @@ class RuntimeCPSMatcherTests_NestedLoops extends AnyFlatSpec {
 
     forAll(validSecondAlt) { str =>
       withClue(s"Failed on input: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe true
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe true
       }
     }
   }
@@ -53,7 +53,7 @@ class RuntimeCPSMatcherTests_NestedLoops extends AnyFlatSpec {
 
     forAll(invalidInputs) { str =>
       withClue(s"Incorrectly matched input: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe false
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe false
       }
     }
   }
@@ -77,7 +77,7 @@ class RuntimeCPSMatcherTests_Grouping extends AnyFlatSpec {
 
     forAll(validInputs) { str =>
       withClue(s"Should have matched: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe true
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe true
       }
     }
   }
@@ -94,7 +94,7 @@ class RuntimeCPSMatcherTests_Grouping extends AnyFlatSpec {
 
     forAll(invalidInputs) { str =>
       withClue(s"Should not have matched: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe false
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe false
       }
     }
   }
@@ -121,7 +121,7 @@ class RuntimeCPSMatcherTests_ComplexExpression extends AnyFlatSpec {
 
     forAll(validInputs) { str =>
       withClue(s"Should have matched: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe true
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe true
       }
     }
   }
@@ -141,7 +141,7 @@ class RuntimeCPSMatcherTests_ComplexExpression extends AnyFlatSpec {
 
     forAll(invalidInputs) { str =>
       withClue(s"Should NOT have matched: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe false
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe false
       }
     }
   }
@@ -169,7 +169,7 @@ class RuntimeCPSMatcherTests_BacktrackingHeavy extends AnyFlatSpec {
 
     forAll(validInputs) { str =>
       withClue(s"Should have matched: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe true
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe true
       }
     }
   }
@@ -188,7 +188,7 @@ class RuntimeCPSMatcherTests_BacktrackingHeavy extends AnyFlatSpec {
 
     forAll(invalidInputs) { str =>
       withClue(s"Should NOT have matched: $str") {
-        CPSMatcher.matches(pattern, groupCount, numReps, str) shouldBe false
+        CPSMatcher.matches(pattern, groupCount, str) shouldBe false
       }
     }
   }
@@ -222,7 +222,7 @@ class RuntimeCPSMatcherTests_WithCapturesNestedLoops extends AnyFlatSpec {
   it should "match expected capture groups for each input" in {
     forAll(cases) { (input, expectedOpt) =>
       val actualOpt =
-        CPSMatcher.matchesWithCaps(pattern, groupCount, numReps, input)
+        CPSMatcher.matchesWithCaps(pattern, groupCount, input)
 
       withClue(s"Input: '$input'") {
         (actualOpt, expectedOpt) match {
@@ -263,7 +263,7 @@ class RuntimeCPSMatcherTests_NestedAltRep extends AnyFlatSpec {
   it should "match expected capture groups for each input" in {
     forAll(cases) { (input, expectedOpt) =>
       val actualOpt =
-        CPSMatcher.matchesWithCaps(pattern, groupCount, numReps, input)
+        CPSMatcher.matchesWithCaps(pattern, groupCount, input)
 
       withClue(s"Input: '$input'") {
         (actualOpt, expectedOpt) match {

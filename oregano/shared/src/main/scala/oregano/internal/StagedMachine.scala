@@ -235,7 +235,7 @@ object StagedMachine:
               pos: Int,
               runq: RE2Queue,
               nextq: RE2Queue,
-              i: Int,
+              _: Int,
               m: RE2Machine
           ) =>
             ${
