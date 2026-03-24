@@ -17,45 +17,44 @@ object StagedMachine {
         val pcExpr = Expr(pc)
 
         inst.op match {
-        case InstOp.FAIL => t
-        case InstOp.NOP => generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
-        case InstOp.ALT | InstOp.LOOP =>
-            val addLeft = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
-            val addRight = generateInlineAdd(inst.arg, prog.getInst(inst.arg), prog, m, cap, pos, q, addLeft, seen)
-            addRight
+            case InstOp.FAIL => t
+            case InstOp.NOP => generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
+            case InstOp.ALT | InstOp.LOOP =>
+                val addLeft = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
+                generateInlineAdd(inst.arg, prog.getInst(inst.arg), prog, m, cap, pos, q, addLeft, seen)
 
-        case InstOp.CAPTURE =>
-            if (inst.arg < prog.numCap) {
-                val slotExpr = Expr(inst.arg)
-                val innerAdd = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{ null }, seen)
-                '{
-                    val old = $cap($slotExpr)
-                    $cap($slotExpr) = $pos
-                    val _ = $innerAdd
-                    $cap($slotExpr) = old
-                    $t
+            case InstOp.CAPTURE =>
+                if (inst.arg < prog.numCap) {
+                    val slotExpr = Expr(inst.arg)
+                    val innerAdd = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{ null }, seen)
+                    '{
+                        val old = $cap($slotExpr)
+                        $cap($slotExpr) = $pos
+                        val _ = $innerAdd
+                        $cap($slotExpr) = old
+                        $t
+                    }
                 }
-            }
-            else generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
+                else generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, t, seen)
 
-        case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL => '{
-            if ($q.contains($pcExpr)) $t
-            else {
-                val d = $q.add($pcExpr)
-                val thread =
-                if $t == null then $m.alloc($m.prog.insts($pcExpr))
+            case InstOp.MATCH | InstOp.RUNE | InstOp.RUNE1 | InstOp.RUNE_ANY | InstOp.RUNE_ANY_NOT_NL => '{
+                if ($q.contains($pcExpr)) $t
                 else {
-                    val reused = $t // required because cannot reassign a param, compiler conservatively assumes val
-                    reused.inst = $m.prog.insts($pcExpr)
-                    reused
-                }
+                    val d = $q.add($pcExpr)
+                    val thread =
+                    if $t == null then $m.alloc($m.prog.insts($pcExpr))
+                    else {
+                        val reused = $t // required because cannot reassign a param, compiler conservatively assumes val
+                        reused.inst = $m.prog.insts($pcExpr)
+                        reused
+                    }
 
-                if ($m.ncap > 0 && (thread.cap ne $cap)) System.arraycopy($cap, 0, thread.cap, 0, $m.ncap)
-                $q.denseThreads(d) = thread
-                null
+                    if ($m.ncap > 0 && (thread.cap ne $cap)) System.arraycopy($cap, 0, thread.cap, 0, $m.ncap)
+                    $q.denseThreads(d) = thread
+                    null
+                }
             }
-        }
-        case _ => quotes.reflect.report.errorAndAbort(s"Unsupported op in inline add: ${inst.op}")
+            case _ => quotes.reflect.report.errorAndAbort(s"Unsupported op in inline add: ${inst.op}")
         }
     }
 

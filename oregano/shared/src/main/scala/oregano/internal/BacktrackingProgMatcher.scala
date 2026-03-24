@@ -85,7 +85,7 @@ private object BacktrackingProgMatcher {
                     def exit(pos: Int): Int = ${compile(prog, inst.arg, end, input, noCaps, 'pos, withCaps, cap, wholeMatch)}
 
                     @tailrec
-                    def forward(pos: Int, b: Backoffs): (Backoffs, Int) = {
+                    def forward(pos: Int, b: Backoffs | Null): (Backoffs, Int) = {
                         val next = ${compile(prog, inst.out, pc, input, noCaps, 'pos, withCaps, cap, wholeMatch)}
 
                         if (next == -1 || next == pos) (b, pos)

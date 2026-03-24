@@ -40,18 +40,12 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
             //"com.github.j-mie6" %%% "parsley-debug" % "5.0.0-M19",
             "org.typelevel" %%% "cats-collections-core" % "0.9.10",
             "org.scalatest" %%% "scalatest" % "3.2.19" % Test,
-            "org.scalatestplus" %%% "scalacheck-1-19" % "3.2.19.0" % Test,
+            "org.scalatestplus" %%% "scalacheck-1-18" % "3.2.19.0" % Test,
         ),
 
         Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
+        //scalacOptions += "-Yexplicit-nulls",
     )
-    .jsSettings(
-        libraryDependencies += "org.scala-lang" %% "scala3-library" % scalaVersion.value
-    )
-    //.jvmSettings(
-        //libraryDependencies += "com.google.re2j" % "re2j" % "1.8",
-        //libraryDependencies += "codes.quine.labo" %% "re2s" % "0.1.1-SNAPSHOT",
-    //)
 
 lazy val benchmark = project
   .in(file("benchmark"))
