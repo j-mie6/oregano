@@ -19,7 +19,7 @@ abstract class Regex[Match] {
 
 object Regex {
     // Fallback method for runtime regexes
-    def runtime(s: String): Regex[?] = new Regex[List[String]] {
+    def runtime(s: String): Regex[List[String]] = new Regex[List[String]] {
         private val compiled = s.r
         //private val patternResult = internal.Pattern.compile(s)
         //private val pattern = patternResult.pattern
@@ -36,11 +36,12 @@ object Regex {
     }
 }
 
-extension (inline r: String) inline def regex: Regex[?] = ${ isInlineable('r) }
+extension (inline r: String) transparent inline def regex: Regex[?] = ${ isInlineable('r) }
 
 private def isInlineable(regExpr: Expr[String])(using Quotes): Expr[Regex[?]] = regExpr match {
     // use the macro, inlineable
     case Expr(s) => internal.compileMacro(s)
+    case '{StringContext.apply(${Expr(s)}).raw()} => internal.compileMacro(StringContext(s).raw())
     // fallback to runtime compilation
     case _ => '{ Regex.runtime($regExpr) }
 }
