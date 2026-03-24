@@ -3,7 +3,7 @@ package oregano.internal
 import scala.collection.mutable.Set
 import scala.quoted.*
 
-object StagedMachine:
+object StagedMachine {
   def generateInlineAdd(
       pc: Int,
       inst: Inst,
@@ -312,5 +312,5 @@ object StagedMachine:
             $runq.clearThread($pcExpr)
         }
 
-      case _ =>
-        '{ () } // No-op
+      case _ => '{ () } // No-op
+}

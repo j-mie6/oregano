@@ -60,7 +60,7 @@ class Match(
     val matchRes: Array[Int],
     val groupCount: Int
     // val groupNames: Seq[String]
-) extends MatchData { 
+) extends MatchData {
 
   val start = matchRes(0)
   val end = matchRes(1)
@@ -78,8 +78,8 @@ class Match(
 }
 
   // class MatchIterator(
-  //   val source: CharSequence, 
-  //   val regex: Regex, 
+  //   val source: CharSequence,
+  //   val regex: Regex,
   //   val groupNames: Seq[String]
   //   )
   //     extends AbstractIterator[String]
@@ -130,21 +130,3 @@ class Match(
   //     def next() = { self.next(); new Match(source, matcher, groupNames).force }
   //   }
   // }
-
-
-@main def matchClassTest(): Unit = {
-  // Example usage of Match class
-  val source = "Hello, world!"
-  // Example match, first word "Hello" and second word "world", with -1 for no match
-  val matchRes = Array(0, 13, 0, 5, 7, 12, -1, -1) 
-  val groupCount = matchRes.length / 2 // This does nothing, need to nix from MatchData
-
-  val matchData = new Match(source, matchRes, groupCount)
-
-  println(s"Matched: ${matchData.matched}")
-  println(s"Start: ${matchData.start}, End: ${matchData.end}")
-  println(s"Group 0: ${matchData.group(0)}")
-  println(s"Group 0: ${matchData.group(1)}")
-  println(s"Group 0: ${matchData.group(2)}")
-  println(s"Group 0: ${matchData.group(3)}")
-}

@@ -6,9 +6,8 @@
 package oregano.internal
 
 import scala.quoted.*
-// import codes.quine.labo.re2s._
 
-private[oregano] def compileMacro(
+private [oregano] def compileMacro(
     s: String
 )(using Quotes): Expr[oregano.Regex[?]] = {
   import quotes.reflect.report
@@ -21,7 +20,7 @@ private[oregano] def compileMacro(
       // report.info(s"expr: $s\nParsley AST: ${ast.toString}\nPattern: ${patternResult.pattern}, groupCount: ${patternResult.groupCount}")
       val prog = ProgramCompiler.compileRegexp(p, groupCount)
       // report.info(s"Prog:\n$prog")
-      val liftedProgExpr = Expr(prog)
+      //val liftedProgExpr = Expr(prog)
       // println(s"Prog:\n$prog")
 
       // backtracking matcher stuff
@@ -46,8 +45,8 @@ private[oregano] def compileMacro(
       // val backtrackProgMatcherExpr = BacktrackingProgMatcher.genMatcher(prog)
       // val backtrackProgMatcherWithCaps = BacktrackingProgMatcher.genMatcherWithCaps(prog)
 
-      // Linear matching stuff
-      var linearMatcherExpr = StagedMachine.generateStepLoop(prog)
+      // Linear matching stuff (TODO: how do we want to do this in practice?)
+      /*var linearMatcherExpr = StagedMachine.generateStepLoop(prog)
       val willBeLinearStaged =
         Utils.countNodes(linearMatcherExpr) < 4500 // heuristic
       if (!willBeLinearStaged) then
@@ -57,7 +56,7 @@ private[oregano] def compileMacro(
         // set linearMatcherExpr to just use runtime
         linearMatcherExpr = '{ (m: RE2Machine, input: CharSequence) =>
           m.matches(input)
-        }
+        }*/
 
       // for testing:
       // val nodeCount = Utils.countNodes(backtrackingMatcherExpr)
@@ -66,16 +65,16 @@ private[oregano] def compileMacro(
       // println(s"regex: $s counted nodes: $nodeCountWithCaps, numInst: ${prog.numInst}")
       '{
         new oregano.Regex[List[String]] {
-          val prog = $liftedProgExpr
-          val re2Machine = RE2Machine(prog)
+          //val prog = $liftedProgExpr
+          //val re2Machine = RE2Machine(prog)
 
           def matches(input: CharSequence): Boolean =
             $backtrackingMatcherExpr(input)
           // def matches(input: CharSequence): Boolean = regex.matches(input)
           def matchesWithCaps(input: CharSequence): Option[Array[Int]] =
             $backtrackingMatcherWithCapsExpr(input)
-          def matchesLinear(input: CharSequence): Boolean =
-            $linearMatcherExpr(re2Machine, input)
+          /*def matchesLinear(input: CharSequence): Boolean =
+            $linearMatcherExpr(re2Machine, input)*/
           def findPrefixOf(source: CharSequence): Option[String] =
             val matchPos = $backtrackingPrefixFinderExpr(0, source)
             if matchPos != -1 then
@@ -92,7 +91,7 @@ private[oregano] def compileMacro(
               pos += 1
             None
 
-          def split(toSplit: CharSequence): Array[String] = 
+          def split(toSplit: CharSequence): Array[String] =
             val result = scala.collection.mutable.ArrayBuffer.empty[String]
             val len = toSplit.length
             var pos = 0

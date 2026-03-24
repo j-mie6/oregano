@@ -8,54 +8,41 @@ package oregano
 import scala.quoted.*
 
 abstract class Regex[Match] {
-  def matches(input: CharSequence): Boolean
-  def matchesWithCaps(input: CharSequence): Option[Array[Int]]
-  def matchesLinear(input: CharSequence): Boolean
-  def findPrefixOf(source: CharSequence): Option[String]
-  def findFirstIn(source: CharSequence): Option[String]
-  def split(toSplit: CharSequence): Array[String]
-  def unapplySeq(input: CharSequence): Option[List[String]]
+    def matches(input: CharSequence): Boolean
+    def matchesWithCaps(input: CharSequence): Option[Array[Int]]
+    //def matchesLinear(input: CharSequence): Boolean
+    def findPrefixOf(source: CharSequence): Option[String]
+    def findFirstIn(source: CharSequence): Option[String]
+    def split(toSplit: CharSequence): Array[String]
+    def unapplySeq(input: CharSequence): Option[List[String]]
 }
 
 object Regex {
-  // Fallback method for runtime regexes
-  def runtime(s: String): Regex[?] = new Regex[List[String]] {
-    private val compiled = s.r
-    private val patternResult = internal.Pattern.compile(s)
-    private val pattern = patternResult.pattern
-    private val numGroups = patternResult.groupCount
-    private val prog =
-      internal.ProgramCompiler.compileRegexp(pattern, numGroups)
-    private val re2Machine = internal.RE2Machine(prog)
-    def matches(input: CharSequence): Boolean = compiled.matches(input)
-    def matchesWithCaps(input: CharSequence): Option[Array[Int]] = ???
-    def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
-    def findPrefixOf(source: CharSequence): Option[String] =
-      compiled.findPrefixOf(source)
-    def findFirstIn(source: CharSequence): Option[String] =
-      compiled.findFirstIn(source)
-    def split(toSplit: CharSequence): Array[String] = compiled.split(toSplit)
-    def unapplySeq(input: CharSequence): Option[List[String]] =
-      compiled.unapplySeq(input)
-  }
+    // Fallback method for runtime regexes
+    def runtime(s: String): Regex[?] = new Regex[List[String]] {
+        private val compiled = s.r
+        //private val patternResult = internal.Pattern.compile(s)
+        //private val pattern = patternResult.pattern
+        //private val numGroups = patternResult.groupCount
+        //private val prog = internal.ProgramCompiler.compileRegexp(pattern, numGroups)
+        //private val re2Machine = internal.RE2Machine(prog)
+        def matches(input: CharSequence): Boolean = compiled.matches(input)
+        def matchesWithCaps(input: CharSequence): Option[Array[Int]] = ???
+        //def matchesLinear(input: CharSequence): Boolean = re2Machine.matches(input)
+        def findPrefixOf(source: CharSequence): Option[String] = compiled.findPrefixOf(source)
+        def findFirstIn(source: CharSequence): Option[String] = compiled.findFirstIn(source)
+        def split(toSplit: CharSequence): Array[String] = compiled.split(toSplit)
+        def unapplySeq(input: CharSequence): Option[List[String]] = compiled.unapplySeq(input)
+    }
 }
 
-extension (inline r: String)
-  inline def regex: Regex[?] =
-    ${ isInlineable('r) }
+extension (inline r: String) inline def regex: Regex[?] = ${ isInlineable('r) }
 
-private def isInlineable(
-    regExpr: Expr[String]
-)(using Quotes): Expr[Regex[?]] = {
-  regExpr match {
-    case Expr(s) =>
-      // use the macro, inlineable
-      internal.compileMacro(s)
-    case _ =>
-      // fallback to runtime compilation
-      println(s"Runtime regex")
-      '{ Regex.runtime($regExpr) }
-  }
+private def isInlineable(regExpr: Expr[String])(using Quotes): Expr[Regex[?]] = regExpr match {
+    // use the macro, inlineable
+    case Expr(s) => internal.compileMacro(s)
+    // fallback to runtime compilation
+    case _ => '{ Regex.runtime($regExpr) }
 }
 
 // FIXME: wrong type, not sure how I want to process the typesafe bit yet, ideally avoid duplication, but might have to :(

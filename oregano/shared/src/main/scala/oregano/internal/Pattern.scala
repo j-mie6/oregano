@@ -155,24 +155,3 @@ given ToExpr[Pattern] with
     case Pattern.Capture(groupIdx, pat) =>
       '{ Pattern.Capture(${ Expr(groupIdx) }, ${ Expr(pat) }) }
   }
-
-@main def testPatterns() =
-  val p1 = Pattern.concat(
-    Pattern.lit('a'),
-    Pattern.concat(Pattern.lit('b'), Pattern.lit('c'))
-  )
-  println(p1)
-
-  val p2 = Pattern.alt(
-    Pattern.lit('x'),
-    Pattern.concat(Pattern.lit('y'), Pattern.lit('z'))
-  )
-  println(p2)
-
-  // check if nested loop detection works
-  val PatternResult(unnestedLoop, _, _, _) = Pattern.compile("ab*c*")
-  println(Pattern.checkFlatControlFlow(unnestedLoop)) // should be false
-
-  val PatternResult(nestedLoop, _, _, _) = Pattern.compile("a(b*)*c*")
-  println(nestedLoop)
-  println(Pattern.checkFlatControlFlow(nestedLoop))

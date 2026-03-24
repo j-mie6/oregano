@@ -1,5 +1,3 @@
-package oregano.shared
-
 import oregano.regex
 
 object Main {
@@ -24,7 +22,7 @@ object Main {
     // println(compileTime.matches("test.user-123@example.com"))
     // println(compileTime.matches("c"))
     // println(compileTime.matches("abc"))
-    println(compileTime.matchesLinear("abc"))
+    //println(compileTime.matchesLinear("abc"))
     println(compileTime.findPrefixOf("defg"))
     println(compileTime.findPrefixOf("de"))
     println(compileTime.findPrefixOf("abbbbaaabcd"))
@@ -66,9 +64,9 @@ object Main {
     // println(s"matches \"ghi\": ${runtime.matches("ghi")}")
 
     // unapply
-    inline val timeEx = "(\\d\\d):(\\d\\d)|(\\d):(\\d\\d)"
+    //inline val timeEx = "(\\d\\d):(\\d\\d)|(\\d):(\\d\\d)"
     inline val dateOrTimeEx = "(\\d\\d\\d\\d)-(\\d\\d)-(\\d\\d)|(\\d\\d):(\\d\\d)"
-    val time = timeEx.regex
+    //val time = timeEx.regex
     val dateOrTime = dateOrTimeEx.regex
     "2020-10-12" match {
       case dateOrTime(hour, minute) =>

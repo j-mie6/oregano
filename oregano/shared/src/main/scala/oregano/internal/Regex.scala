@@ -5,7 +5,9 @@
  */
 package oregano.internal
 
-import parsley.generic.*
+import parsley.Parsley.pure
+import parsley.templates.*
+import parsley.bridges.ParserSingletonBridge
 import cats.collections.{Diet, Range}
 
 // This is matching with Java 8 Regex
@@ -37,33 +39,33 @@ private enum Regex {
   /** matches any character (this can include line terminators depending on
     * flags)
     */
-  case Dot extends Regex with ParserBridge0[Regex]
+  case Dot extends Regex with PureParserBridge0[Regex]
 
   /** `^`: the beginning of a line */
-  case LineStart extends Regex with ParserBridge0[Regex]
+  case LineStart extends Regex with PureParserBridge0[Regex]
 
   /** `$`: the end of a line */
-  case LineEnd extends Regex with ParserBridge0[Regex]
+  case LineEnd extends Regex with PureParserBridge0[Regex]
 
   /** `\b`: a word boundary */
   case WordBoundary
       extends Regex
-      with ParserBridge0[Regex] // FIXME: is this just a composite?
+      with PureParserBridge0[Regex] // FIXME: is this just a composite?
   /** `\B`: a non-word boundary */
   case NonWordBoundary
       extends Regex
-      with ParserBridge0[Regex] // FIXME: is this just a composite?
+      with PureParserBridge0[Regex] // FIXME: is this just a composite?
   /** `\A`: beginning of the input */
-  case InputStart extends Regex with ParserBridge0[Regex]
+  case InputStart extends Regex with PureParserBridge0[Regex]
 
   /** `\G`: end of previous match */
-  case PrevMatchEnd extends Regex with ParserBridge0[Regex]
+  case PrevMatchEnd extends Regex with PureParserBridge0[Regex]
 
   /** `\Z`: end of input except for final terminator, if any */
-  case InputEndSansFinal extends Regex with ParserBridge0[Regex]
+  case InputEndSansFinal extends Regex with PureParserBridge0[Regex]
 
   /** `\z`: end of input */
-  case InputEnd extends Regex with ParserBridge0[Regex]
+  case InputEnd extends Regex with PureParserBridge0[Regex]
 
   /** `X?`: once or not at all */
   case Opt(r: Regex)
@@ -142,51 +144,51 @@ private enum Regex {
 }
 private object Regex {
   private[internal] val AllSet = Diet.fromRange(Range(0x00000, 0x1ffff))
-  object Lit extends ParserBridge1[Int, Regex] {
+  object Lit extends PureParserBridge1[Int, Regex] {
     override def labels: List[String] = List("literal")
   }
-  object Class extends ParserBridge1[Diet[Int], Regex]
-  object Opt extends ParserBridge1[Regex, Regex]
-  object Rep0 extends ParserBridge1[Regex, Regex]
-  object Rep1 extends ParserBridge1[Regex, Regex]
-  object Exactly extends ParserBridge2[Regex, Int, Regex]
-  object AtLeast extends ParserBridge2[Regex, Int, Regex]
-  object Between extends ParserBridge3[Regex, Int, Int, Regex]
-  object LazyOpt extends ParserBridge1[Regex, Regex]
-  object LazyRep0 extends ParserBridge1[Regex, Regex]
-  object LazyRep1 extends ParserBridge1[Regex, Regex]
-  object LazyExactly extends ParserBridge2[Regex, Int, Regex]
-  object LazyAtLeast extends ParserBridge2[Regex, Int, Regex]
-  object LazyBetween extends ParserBridge3[Regex, Int, Int, Regex]
-  object Cat extends ParserBridge1[List[Regex], Regex] {
+  object Class extends PureParserBridge1[Diet[Int], Regex]
+  object Opt extends PureParserBridge1[Regex, Regex]
+  object Rep0 extends PureParserBridge1[Regex, Regex]
+  object Rep1 extends PureParserBridge1[Regex, Regex]
+  object Exactly extends PureParserBridge2[Regex, Int, Regex]
+  object AtLeast extends PureParserBridge2[Regex, Int, Regex]
+  object Between extends PureParserBridge3[Regex, Int, Int, Regex]
+  object LazyOpt extends PureParserBridge1[Regex, Regex]
+  object LazyRep0 extends PureParserBridge1[Regex, Regex]
+  object LazyRep1 extends PureParserBridge1[Regex, Regex]
+  object LazyExactly extends PureParserBridge2[Regex, Int, Regex]
+  object LazyAtLeast extends PureParserBridge2[Regex, Int, Regex]
+  object LazyBetween extends PureParserBridge3[Regex, Int, Int, Regex]
+  object Cat extends PureParserBridge1[List[Regex], Regex] {
     def apply(rs: Regex*): Regex = Cat(rs.toList)
   }
-  object Alt extends ParserBridge2[Regex, Regex, Regex]
-  object Capture extends ParserBridge1[Regex, Regex]
-  object Back extends ParserBridge1[Int, Regex]
-  object NamedBack extends ParserBridge1[String, Regex]
-  object NamedCapture extends ParserBridge2[String, Regex, Regex]
-  object AheadPos extends ParserBridge1[Regex, Regex]
-  object AheadNeg extends ParserBridge1[Regex, Regex]
-  object BehindPos extends ParserBridge1[Regex, Regex]
-  object BehindNeg extends ParserBridge1[Regex, Regex]
-  object Atomic extends ParserBridge1[Regex, Regex]
+  object Alt extends PureParserBridge2[Regex, Regex, Regex]
+  object Capture extends PureParserBridge1[Regex, Regex]
+  object Back extends PureParserBridge1[Int, Regex]
+  object NamedBack extends PureParserBridge1[String, Regex]
+  object NamedCapture extends PureParserBridge2[String, Regex, Regex]
+  object AheadPos extends PureParserBridge1[Regex, Regex]
+  object AheadNeg extends PureParserBridge1[Regex, Regex]
+  object BehindPos extends PureParserBridge1[Regex, Regex]
+  object BehindNeg extends PureParserBridge1[Regex, Regex]
+  object Atomic extends PureParserBridge1[Regex, Regex]
 
   // Predefined Character Classes
   /** `\d`: a digit */
   object Digit extends ParserSingletonBridge[Class] {
-    def con = new Class(set)
+    def singleton = pure(new Class(set))
     def set = Diet.fromRange(Range('0'.toInt, '9'.toInt))
   }
 
   /** `\D`: a non-digit */
   object NonDigit extends ParserSingletonBridge[Class] {
-    def con = new Class(AllSet -- Digit.set)
+    def singleton = pure(new Class(AllSet -- Digit.set))
   }
 
   /** `\h`: horizontal whitespace */
   object HorizontalWhitespace extends ParserSingletonBridge[Class] {
-    def con = new Class(set)
+    def singleton = pure(new Class(set))
     def set = Diet
       .one(' '.toInt)
       .add('\t'.toInt)
@@ -201,12 +203,12 @@ private object Regex {
 
   /** `\H`: non-horizontal whitespace */
   object NonHorizontalWhitespace extends ParserSingletonBridge[Class] {
-    def con = new Class(AllSet -- HorizontalWhitespace.set)
+    def singleton = pure(new Class(AllSet -- HorizontalWhitespace.set))
   }
 
   /** `\s`: a whitespace character * */
   object Whitespace extends ParserSingletonBridge[Class] {
-    def con = new Class(set)
+    def singleton = pure(new Class(set))
     def set = Diet
       .one(' '.toInt)
       .add('\t'.toInt)
@@ -218,12 +220,12 @@ private object Regex {
 
   /** `\S`: not a whitespace character */
   object NonWhitespace extends ParserSingletonBridge[Class] {
-    def con = new Class(AllSet -- Whitespace.set)
+    def singleton = pure(new Class(AllSet -- Whitespace.set))
   }
 
   /** `\v`: a whitespace character * */
   object VerticalWhitespace extends ParserSingletonBridge[Class] {
-    def con = new Class(set)
+    def singleton = pure(new Class(set))
     def set = Diet
       .one('\n'.toInt)
       .add(0x000b)
@@ -236,12 +238,12 @@ private object Regex {
 
   /** `\V`: not a whitespace character */
   object NonVerticalWhitespace extends ParserSingletonBridge[Class] {
-    def con = new Class(AllSet -- VerticalWhitespace.set)
+    def singleton = pure(new Class(AllSet -- VerticalWhitespace.set))
   }
 
   /** `\w`: a word character */
   object Word extends ParserSingletonBridge[Class] {
-    def con = new Class(set)
+    def singleton = pure(new Class(set))
     def set = Diet
       .fromRange(Range('a'.toInt, 'z'.toInt))
       .addRange(Range('A'.toInt, 'Z'.toInt))
@@ -251,7 +253,7 @@ private object Regex {
 
   /** `\W`: a non-word character */
   object NonWord extends ParserSingletonBridge[Class] {
-    def con = new Class(AllSet -- Word.set)
+    def singleton = pure(new Class(AllSet -- Word.set))
   }
 
   // TODO: POSIX Character Classes
@@ -292,7 +294,7 @@ private object Regex {
 
   /** `\R`: any Unicode linebreak sequence */
   object Linebreak extends ParserSingletonBridge[Regex] {
-    def con = Alt(Cat(Lit(0x000d), Lit(0x000a)), Class(set))
+    def singleton = pure(Alt(Cat(Lit(0x000d), Lit(0x000a)), Class(set)))
     def set = Diet
       .fromRange(Range(0x000a, 0x000d))
       .add(0x0085)

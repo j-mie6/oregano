@@ -70,7 +70,7 @@ class ProgramCompiler {
       Frag(f.i, (f.i << 1) | 1)
   }
 
-  /* 
+  /*
   Below blindly reimplemented, perhaps useful for reference but currently unused.
    */
   // private def quest(f1: Frag, nongreedy: Boolean): Frag = {
@@ -171,13 +171,4 @@ object ProgramCompiler {
     val compiler = new ProgramCompiler()
     compiler.compileRegexp(re, numCap)
   }
-}
-
-@main def testProgramCompiler(): Unit = {
-  val regex = "(a(b))*c|def"
-  val PatternResult(pattern, groupCount, _, _) = Pattern.compile(regex)
-  // val pattern = patternResult.pattern
-  // val numCap = patternResult.numGroups
-  val frag = ProgramCompiler.compileRegexp(pattern, groupCount)
-  println(frag)
 }

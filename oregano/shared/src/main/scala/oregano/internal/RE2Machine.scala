@@ -222,19 +222,6 @@ class RE2Machine(val prog: Prog) extends Machine:
       if pos < input.length then pos += 1
       val tmp = runq; runq = nextq; nextq = tmp
 
-    println(matchcap.mkString(","))
+    //println(matchcap.mkString(","))
     if anchorEnd then matchcap(1) == input.length
     else matchcap(1) != -1
-
-@main def testRE2Machine(): Unit =
-  val PatternResult(nestPattern, nestPatternCaps, _, _) =
-    Pattern.compile("((ab)*|(cd)*)*")
-  val prog = ProgramCompiler.compileRegexp(nestPattern, nestPatternCaps)
-  val machine = RE2Machine(prog)
-  println(machine.matches("abababcdcdcdababab"))
-  println(machine.matches("abababcdcdcdababa"))
-  println(machine.matches("abababcdcdcd"))
-  println(machine.matches("abababcdcdc"))
-  machine.anchorEnd = false
-  println(machine.matches("ababyabadabadoo"))
-  println(machine.matches("abababcdcdc"))

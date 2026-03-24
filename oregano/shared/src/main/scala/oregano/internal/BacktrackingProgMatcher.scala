@@ -127,7 +127,7 @@ object BacktrackingProgMatcher:
             else -1
           }
 
-        case InstOp.LOOP => 
+        case InstOp.LOOP =>
           '{
             def exit(pos: Int): Int =
               ${
@@ -379,8 +379,3 @@ object BacktrackingProgMatcher:
       true
     } else false
   }
-
-@main def testProgMatcher(): Unit =
-  val PatternResult(pat, numGroups, _, _) = Pattern.compile("(a*b*)*bc")
-  val prog = ProgramCompiler.compileRegexp(pat, numGroups)
-  println("prog: " + BacktrackingProgMatcher.matches(prog, "abababc"))
