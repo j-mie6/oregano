@@ -14,13 +14,13 @@ type StepFn = (Int, Int, RE2Queue, RE2Queue, Int, RE2Machine) => Unit
 /*
 A Scala port of the RE2J machine, currently to help me reason about things
  */
-class RE2Thread(var inst: Inst, var cap: Array[Int])
-object RE2Thread {
-    def apply(n: Int): RE2Thread = new RE2Thread(null, new Array[Int](n))
+class RE2Thread(var cap: Array[Int]) {
+    def this(n: Int) = this(new Array[Int](n))
+    var inst: Inst = scala.compiletime.uninitialized
 }
 
 class RE2Queue(n: Int) {
-    val denseThreads: Array[RE2Thread] = new Array[RE2Thread](n)
+    val denseThreads: Array[RE2Thread | Null] = new Array[RE2Thread | Null](n)
     val densePcs: Array[Int] = new Array[Int](n)
     val sparse: Array[Int] = new Array[Int](n)
     var size: Int = 0
@@ -42,7 +42,7 @@ class RE2Queue(n: Int) {
         j
     }
 
-    def getThread(pc: Int): RE2Thread = {
+    def getThread(pc: Int): RE2Thread | Null = {
         val j = sparse(pc)
         if j < size && densePcs(j) == pc then denseThreads(j)
         else null
@@ -54,7 +54,7 @@ class RE2Queue(n: Int) {
     }
 
     def clear(): Unit = size = 0
-    def getCap(pc: Int): Array[Int] = denseThreads(sparse(pc)).cap
+    def getCap(pc: Int): Array[Int] = denseThreads(sparse(pc)).nn.cap
 }
 
 class RE2Machine(val prog: Prog) extends Machine {
@@ -87,11 +87,11 @@ class RE2Machine(val prog: Prog) extends Machine {
 
     def alloc(inst: Inst): RE2Thread = {
         val t =
-        if (poolSize > 0) {
-            poolSize -= 1
-            pool(poolSize)
-        }
-        else new RE2Thread(inst, new Array[Int](matchcap.length))
+            if (poolSize > 0) {
+                poolSize -= 1
+                pool(poolSize)
+            }
+            else RE2Thread(new Array[Int](matchcap.length))
         t.inst = inst
         t
     }
@@ -120,7 +120,7 @@ class RE2Machine(val prog: Prog) extends Machine {
         poolSize += 1
     }
 
-    def add(pc: Int, pos: Int, cap: Array[Int], q: RE2Queue, t: RE2Thread): RE2Thread = {
+    def add(pc: Int, pos: Int, cap: Array[Int], q: RE2Queue, t: RE2Thread | Null): RE2Thread | Null = {
         if (pc == 0) t
         else if (q.contains(pc)) t
         else {

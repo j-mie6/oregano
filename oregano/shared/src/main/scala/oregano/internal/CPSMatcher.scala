@@ -31,28 +31,27 @@ private def dietContains(diet: Diet[Int])(using Quotes): Expr[Int] => Expr[Boole
 }
 
 private object CPSMatcher {
-    private def compile(p: Pattern, input: Expr[CharSequence], noCaps: Int, pos: Expr[Int], cont: Expr[Int] => Expr[Int], withCaps: Boolean, groupsExpr: Expr[Array[Int]])(using Quotes): Expr[Int] = p match {
+    private def compile(p: Pattern, input: Expr[CharSequence], noCaps: Int, pos: Expr[Int], cont: Expr[Int] => Expr[Int], groupsExpr: Option[Expr[Array[Int]]])(using Quotes): Expr[Int] = p match {
         case Pattern.Lit(c) => '{if $pos < $input.length && $input.charAt($pos) == ${Expr(c)} then ${cont('{ $pos + 1 })} else -1}
         case Pattern.Class(diet) =>
             val runeCheck: Expr[Int] => Expr[Boolean] = dietContains(diet)
             val condExpr: Expr[Boolean] = runeCheck('{ $input.charAt($pos).toInt })
             '{if $pos < $input.length && $condExpr then ${ cont('{ $pos + 1 }) } else -1}
-        case Pattern.Cat(ps) => ps.foldRight(cont)((sub, next) => (p: Expr[Int]) => compile(sub, input, noCaps, p, next, withCaps, groupsExpr))(pos)
+        case Pattern.Cat(ps) => ps.foldRight(cont)((sub, next) => (p: Expr[Int]) => compile(sub, input, noCaps, p, next, groupsExpr))(pos)
         case Pattern.Alt(p1, p2) =>
-            val left  = compile(p1, input, noCaps, pos, cont, withCaps, groupsExpr)
-            val right = compile(p2, input, noCaps, pos, cont, withCaps, groupsExpr)
+            val left  = compile(p1, input, noCaps, pos, cont, groupsExpr)
+            val right = compile(p2, input, noCaps, pos, cont, groupsExpr)
             '{ val lp = $left; if lp >= 0 then lp else $right }
 
         case Pattern.Rep0(sub, _) => '{
             def self(p: Int): Int =
-                val step = ${compile(sub, input, noCaps, 'p, (next: Expr[Int]) => '{ if $next != p then self($next) else -1 }, withCaps, groupsExpr)}
+                val step = ${compile(sub, input, noCaps, 'p, (next: Expr[Int]) => '{ if $next != p then self($next) else -1 }, groupsExpr)}
                 if step >= 0 then step else ${cont('p)}
             self($pos)
         }
 
-        case Pattern.Capture(idx, sub) =>
-            if (!withCaps || idx >= noCaps) compile(sub, input, noCaps, pos, cont, false, '{null})
-            else {
+        case Pattern.Capture(idx, sub) => groupsExpr match {
+            case Some(groupsExpr) if idx < noCaps =>
                 val startIdx = Expr(2 * idx)
                 val endIdx   = Expr(2 * idx + 1)
 
@@ -67,7 +66,7 @@ private object CPSMatcher {
                     }
                 }
 
-                val inner = compile(sub, input, noCaps, pos, newCont, true, groupsExpr)
+                val inner = compile(sub, input, noCaps, pos, newCont, Some(groupsExpr))
 
                 '{
                     val savedStart = $groupsExpr($startIdx)
@@ -79,11 +78,12 @@ private object CPSMatcher {
                         -1
                     }
                 }
-            }
+            case _ => compile(sub, input, noCaps, pos, cont, None)
+        }
     }
 
     def genMatcherPattern(pattern: Pattern)(using Quotes): Expr[CharSequence => Boolean] = '{ (input: CharSequence) =>
-        val result = ${compile(pattern, 'input, 0, '{ 0 }, (i: Expr[Int]) => '{ if $i == input.length then $i else -1 }, false, '{ null })}
+        val result = ${compile(pattern, 'input, 0, '{ 0 }, (i: Expr[Int]) => '{ if $i == input.length then $i else -1 }, None)}
         result == input.length
     }
 
@@ -92,7 +92,7 @@ private object CPSMatcher {
         val groups = Array.fill(${Expr(numGroups * 2)})(-1)
         groups(0) = 0
 
-        val result = ${compile(pattern, 'input, numGroups, '{0}, (i: Expr[Int]) => '{ if $i == inputLen then $i else -1 }, withCaps = true, 'groups)}
+        val result = ${compile(pattern, 'input, numGroups, '{0}, (i: Expr[Int]) => '{ if $i == inputLen then $i else -1 }, Some('groups))}
 
         if (result == inputLen) {
             groups(1) = result
@@ -102,7 +102,7 @@ private object CPSMatcher {
     }
 
     def genPrefixFinderPattern(pattern: Pattern, numGroups: Int)(using Quotes): Expr[(Int, CharSequence) => Int] = '{ (startPos: Int, input: CharSequence) =>
-        ${compile(pattern, 'input, numGroups, 'startPos, identity, withCaps = false, '{ null })}
+        ${compile(pattern, 'input, numGroups, 'startPos, identity, None)}
     }
 
     // FIXME: this seems to be only used with tests, can the tests just use the staging? perhaps runtime staging?

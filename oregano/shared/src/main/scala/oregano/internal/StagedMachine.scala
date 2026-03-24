@@ -9,7 +9,7 @@ import scala.collection.mutable.Set
 import scala.quoted.*
 
 object StagedMachine {
-    def generateInlineAdd(pc: Int, inst: Inst, prog: Prog, m: Expr[RE2Machine], cap: Expr[Array[Int]], pos: Expr[Int], q: Expr[RE2Queue], t: Expr[RE2Thread], seen: Set[Int] = Set.empty[Int])(using Quotes): Expr[RE2Thread] = {
+    def generateInlineAdd(pc: Int, inst: Inst, prog: Prog, m: Expr[RE2Machine], cap: Expr[Array[Int]], pos: Expr[Int], q: Expr[RE2Queue], t: Expr[RE2Thread | Null], seen: Set[Int] = Set.empty[Int])(using Quotes): Expr[RE2Thread | Null] = {
         if (seen.contains(pc)) return t
         // println(s"Generating inline add for $pc")
         seen.add(pc)
@@ -26,7 +26,7 @@ object StagedMachine {
             case InstOp.CAPTURE =>
                 if (inst.arg < prog.numCap) {
                     val slotExpr = Expr(inst.arg)
-                    val innerAdd = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{ null }, seen)
+                    val innerAdd = generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, cap, pos, q, '{null}, seen)
                     '{
                         val old = $cap($slotExpr)
                         $cap($slotExpr) = $pos
@@ -41,12 +41,14 @@ object StagedMachine {
                 if ($q.contains($pcExpr)) $t
                 else {
                     val d = $q.add($pcExpr)
-                    val thread =
-                    if $t == null then $m.alloc($m.prog.insts($pcExpr))
-                    else {
-                        val reused = $t // required because cannot reassign a param, compiler conservatively assumes val
-                        reused.inst = $m.prog.insts($pcExpr)
-                        reused
+                    val thread = {
+                        val reused = $t
+                        if reused == null then $m.alloc($m.prog.insts($pcExpr))
+                        else {
+                            // required because cannot reassign a param, compiler conservatively assumes val
+                            reused.inst = $m.prog.insts($pcExpr)
+                            reused
+                        }
                     }
 
                     if ($m.ncap > 0 && (thread.cap ne $cap)) System.arraycopy($cap, 0, thread.cap, 0, $m.ncap)
@@ -123,12 +125,12 @@ object StagedMachine {
         inst.op match {
             case InstOp.MATCH => '{
                 val t = $runq.getThread($pcExpr)
-                if ($rune == -1 && $m.anchorEnd || ! $m.anchorEnd) { // should be some EOF, need to wrap inputs
-                    t.cap(1) = $pos
-                    Array.copy(t.cap, 0, $m.matchcap, 0, $m.ncap)
-                    $m.matched = true
-                }
                 if (t != null) {
+                    if ($rune == -1 && $m.anchorEnd || ! $m.anchorEnd) { // should be some EOF, need to wrap inputs
+                        t.cap(1) = $pos
+                        Array.copy(t.cap, 0, $m.matchcap, 0, $m.ncap)
+                        $m.matched = true
+                    }
                     $m.free(t)
                     $runq.clearThread($pcExpr)
                 }
@@ -139,14 +141,12 @@ object StagedMachine {
                 val matched = runeCheck(rune)
                 '{
                     var t = $runq.getThread($pcExpr)
-                    if (t != null) {
-                        // val matched = ${ runeCheck }($rune)
-                        // interestingly this is inlined in the 'inline everything' approach, but not ordinarily!
-                        if ($matched) {
+                    val t1 = t // helps the null checks
+                    // interestingly this is inlined in the 'inline everything' approach, but not ordinarily!
+                    if (t1 != null && $matched) {
                         // uncomment for recursive add
-                        // t = $m.add($instOutExpr, $pos + 1, t.cap, $nextq, t)
-                        t = ${generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, '{ t.cap }, '{ $pos + 1 }, nextq, 't)}
-                        }
+                        // t = $m.add($instOutExpr, $pos + 1, t1.cap, $nextq, t1)
+                        t = ${generateInlineAdd(inst.out, prog.getInst(inst.out), prog, m, '{ t1.cap }, '{ $pos + 1 }, nextq, 't1)}
                     }
                     if (t != null) {
                         $m.free(t)

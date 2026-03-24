@@ -44,7 +44,7 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
         ),
 
         Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
-        //scalacOptions += "-Yexplicit-nulls",
+        scalacOptions += "-Yexplicit-nulls",
     )
     .jsSettings(
         libraryDependencies += "org.scala-lang" %% "scala3-library" % scalaVersion.value

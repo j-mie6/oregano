@@ -8,8 +8,8 @@ package oregano.internal
 import scala.quoted.*
 import scala.annotation.tailrec
 
-final class Backoffs(val width: Int, var count: Int, val parent: Backoffs) {
-    override def toString: String = s"Backoffs(width=$width, count=$count, parent=${if parent == null then "null" else parent.toString})"
+final class Backoffs(val width: Int, var count: Int, val parent: Backoffs | Null) {
+    override def toString: String = s"Backoffs(width=$width, count=$count, parent=$parent)"
 }
 
 /*@tailrec
@@ -43,30 +43,29 @@ def backtrack(cur: Backoffs, startPos: Int, endPos: Int, i: Int, exitFn: Int => 
 
 private object BacktrackingProgMatcher {
     // TODO: encapsulate this state properly
-    private def compile(prog: Prog, pc: Int, end: Int, input: Expr[CharSequence], noCaps: Int, pos: Expr[Int], withCaps: Boolean, cap: Expr[Array[Int]], wholeMatch: Boolean)(using Quotes): Expr[Int] = {
+    private def compile(prog: Prog, pc: Int, end: Int, input: Expr[CharSequence], noCaps: Int, pos: Expr[Int], cap: Option[Expr[Array[Int]]], wholeMatch: Boolean)(using Quotes): Expr[Int] = {
         if (pc == end) pos
         else {
             val inst = prog.getInst(pc)
             inst.op match
-                case InstOp.MATCH =>
-                    if !withCaps then
-                        if wholeMatch then '{ if $pos == $input.length then $pos else -1 }
-                        else pos
-                    else if wholeMatch then '{
-                        if ($pos == $input.length) {
+                case InstOp.MATCH => cap match
+                    case None => if wholeMatch then '{ if $pos == $input.length then $pos else -1 } else pos
+                    case Some(cap) =>
+                        if wholeMatch then '{
+                            if ($pos == $input.length) {
+                                $cap(1) = $pos
+                                $pos
+                            } else -1
+                        }
+                        else '{
                             $cap(1) = $pos
                             $pos
-                        } else -1
-                    }
-                    else '{
-                        $cap(1) = $pos
-                        $pos
-                    }
+                        }
                 case InstOp.FAIL => '{ -1 }
 
                 case InstOp.ALT =>
-                    val leftExpr = compile(prog, inst.out, end, input, noCaps, pos, withCaps, cap, wholeMatch)
-                    val rightExpr = compile(prog, inst.arg, end, input, noCaps, pos, withCaps, cap, wholeMatch)
+                    val leftExpr = compile(prog, inst.out, end, input, noCaps, pos, cap, wholeMatch)
+                    val rightExpr = compile(prog, inst.arg, end, input, noCaps, pos, cap, wholeMatch)
                     '{
                         val lp = $leftExpr
                         if lp >= 0 then lp else $rightExpr
@@ -75,18 +74,18 @@ private object BacktrackingProgMatcher {
                 case InstOp.RUNE | InstOp.RUNE1 =>
                     val runeCheck = inst.matchRuneExpr
                     val nextPos = '{ $pos + 1 }
-                    val succExpr = compile(prog, inst.out, end, input, noCaps, nextPos, withCaps, cap, wholeMatch)
+                    val succExpr = compile(prog, inst.out, end, input, noCaps, nextPos, cap, wholeMatch)
                     val charExpr: Expr[Int] = '{ $input.charAt($pos).toInt }
                     val condExpr: Expr[Boolean] = runeCheck(charExpr)
 
                     '{ if ($pos < $input.length && $condExpr) then $succExpr else -1 }
 
                 case InstOp.LOOP => '{
-                    def exit(pos: Int): Int = ${compile(prog, inst.arg, end, input, noCaps, 'pos, withCaps, cap, wholeMatch)}
+                    def exit(pos: Int): Int = ${compile(prog, inst.arg, end, input, noCaps, 'pos, cap, wholeMatch)}
 
                     @tailrec
-                    def forward(pos: Int, b: Backoffs | Null): (Backoffs, Int) = {
-                        val next = ${compile(prog, inst.out, pc, input, noCaps, 'pos, withCaps, cap, wholeMatch)}
+                    def forward(pos: Int, b: Backoffs | Null): (Backoffs | Null, Int) = {
+                        val next = ${compile(prog, inst.out, pc, input, noCaps, 'pos, cap, wholeMatch)}
 
                         if (next == -1 || next == pos) (b, pos)
                         else {
@@ -100,7 +99,7 @@ private object BacktrackingProgMatcher {
                     }
 
                     @tailrec
-                    def backtrack(cur: Backoffs, base: Int, i: Int): Int = {
+                    def backtrack(cur: Backoffs | Null, base: Int, i: Int): Int = {
                         if (cur == null) exit($pos)
                         else if (i < cur.count) {
                             val attemptPos = base - i * cur.width
@@ -117,26 +116,27 @@ private object BacktrackingProgMatcher {
 
                 case InstOp.CAPTURE =>
                     val slot = inst.arg
-                    val nextExp = compile(prog, inst.out, end, input, noCaps, pos, withCaps, cap, wholeMatch)
+                    val nextExp = compile(prog, inst.out, end, input, noCaps, pos, cap, wholeMatch)
 
-                    if (!withCaps || slot >= noCaps) '{
-                        val res = $nextExp
-                        if (res >= 0) then res else -1
-                    }
-                    else {
-                        val slotIdx: Expr[Int] = Expr(slot)
-                        '{
-                            val oldVal = $cap(${ slotIdx })
-                            val curPos = $pos
+                    cap match {
+                        case Some(cap) if slot < noCaps =>
+                            val slotIdx: Expr[Int] = Expr(slot)
+                            '{
+                                val oldVal = $cap($slotIdx)
+                                val curPos = $pos
+                                val res = $nextExp
+                                if (res >= 0) {
+                                    $cap($slotIdx) = curPos
+                                    res
+                                }
+                                else {
+                                    $cap($slotIdx) = oldVal
+                                    -1
+                                }
+                            }
+                        case _ => '{
                             val res = $nextExp
-                            if (res >= 0) {
-                                $cap(${ slotIdx }) = curPos
-                                res
-                            }
-                            else {
-                                $cap(${ slotIdx }) = oldVal
-                                -1
-                            }
+                            if (res >= 0) then res else -1
                         }
                     }
 
@@ -145,7 +145,7 @@ private object BacktrackingProgMatcher {
     }
 
     def genMatcher(prog: Prog)(using Quotes): Expr[CharSequence => Boolean] = '{ (input: CharSequence) =>
-        val result: Int = ${compile(prog, prog.start, prog.numInst, 'input, 0, '{ 0 }, withCaps = false, '{ null }, wholeMatch = true)}
+        val result: Int = ${compile(prog, prog.start, prog.numInst, 'input, 0, '{ 0 }, cap = None, wholeMatch = true)}
         result == input.length
     }
 
@@ -153,13 +153,13 @@ private object BacktrackingProgMatcher {
         val groups = Array.fill(${Expr(prog.numCap)})(-1)
         groups(0) = 0
 
-        val result: Int = ${compile(prog, prog.start, prog.numInst, 'input, prog.numCap, '{ 0 }, withCaps = true, 'groups, wholeMatch = true)}
+        val result: Int = ${compile(prog, prog.start, prog.numInst, 'input, prog.numCap, '{ 0 }, cap = Some('groups), wholeMatch = true)}
 
         if result == input.length then Some(groups) else None
     }
 
     def genPrefixFind(prog: Prog)(using Quotes): Expr[(Int, CharSequence) => Int] = '{ (startPos: Int, input: CharSequence) =>
-        /*val result: Int = */${compile(prog, prog.start, prog.numInst, 'input, 0, 'startPos, withCaps = false, '{ null },  wholeMatch = false)}
+        /*val result: Int = */${compile(prog, prog.start, prog.numInst, 'input, 0, 'startPos, cap = None,  wholeMatch = false)}
         //result
     }
 
