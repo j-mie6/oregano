@@ -45,6 +45,9 @@ lazy val oregano = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 
         Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
     )
+    .jsSettings(
+        libraryDependencies += "org.scala-lang" %% "scala3-library" % scalaVersion.value
+    )
     //.jvmSettings(
         //libraryDependencies += "com.google.re2j" % "re2j" % "1.8",
         //libraryDependencies += "codes.quine.labo" %% "re2s" % "0.1.1-SNAPSHOT",
