@@ -1,3 +1,8 @@
+/*
+ * Copyright 2024 Oregano Contributors <https://github.com/j-mie6/oregano/graphs/contributors>
+ *
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers.*
 import org.scalatest.prop.TableDrivenPropertyChecks.*
